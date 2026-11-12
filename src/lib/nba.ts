@@ -654,6 +654,16 @@ export function decOdds(o: number): number {
   return o > 0 ? 1 + o / 100 : 1 + 100 / -o;
 }
 
+export const TIME_OPTIONS = [
+  { value: 24, label: "Today" },
+  { value: 48, label: "2 days" },
+  { value: 72, label: "3 days" },
+  { value: 120, label: "5 days" },
+  { value: 168, label: "1 week" },
+  { value: 336, label: "2 weeks" },
+  { value: 0, label: "All" },
+] as const;
+
 export function clamp(x: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, x));
 }

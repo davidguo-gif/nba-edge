@@ -11,9 +11,10 @@ import { SystemsTab } from "./SystemsTab";
 import { TrackerTab } from "./TrackerTab";
 import { DataTab } from "./DataTab";
 import { PropDetailView } from "./PropDetailView";
+import { TIME_OPTIONS } from "@/lib/nba";
 
 export function AppShell() {
-  const { loading, error, activeTab, refresh, oddsFormat, setOddsFormat, propDetail } = useNBA();
+  const { loading, error, activeTab, refresh, oddsFormat, setOddsFormat, propDetail, timeHorizon, setTimeHorizon } = useNBA();
 
   if (loading) {
     return (
@@ -51,7 +52,20 @@ export function AppShell() {
           🏀 NBA <b>Edge</b>
         </div>
         <Nav />
-        <label className="text-xs" style={{ marginLeft: "auto", color: "var(--mut)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap", marginLeft: "auto" }}>
+          <span>⏰ <b>{TIME_OPTIONS.find((o) => o.value === timeHorizon)?.label || `${Math.round(timeHorizon / 24)}d`}</b></span>
+          <input
+            type="range"
+            min={0}
+            max={TIME_OPTIONS.length - 1}
+            step={1}
+            value={Math.max(0, TIME_OPTIONS.findIndex((o) => o.value === timeHorizon))}
+            onChange={(e) => setTimeHorizon(TIME_OPTIONS[+e.target.value].value)}
+            style={{ width: 72, cursor: "pointer", verticalAlign: "middle" }}
+            title="Time horizon for Slate, Props & Parlay"
+          />
+        </label>
+        <label className="text-xs" style={{ color: "var(--mut)" }}>
           Odds{" "}
           <select
             value={oddsFormat}

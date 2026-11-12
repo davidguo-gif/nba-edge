@@ -40,6 +40,8 @@ interface NBAContextType {
   setSelTeam: (t: string | null) => void;
   selPlayer: number | null;
   setSelPlayer: (p: number | null) => void;
+  timeHorizon: number;
+  setTimeHorizon: (h: number) => void;
 }
 
 const NBAContext = createContext<NBAContextType | null>(null);
@@ -59,6 +61,8 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [focus, setFocus] = useState<NBAContextType["focus"]>(null);
   const clearFocus = useCallback(() => setFocus(null), []);
   const [propDetail, setPropDetail] = useState<number | null>(null);
+  const [timeHorizon, setTimeHorizonRaw] = useState(24);
+  const setTimeHorizon = useCallback((h: number) => { setTimeHorizonRaw(h); save("timeHorizon", h); }, []);
   // jump from a parlay leg to the prop (Props tab) or game (Slate tab) it came from
   const goToLeg = useCallback((leg: ParlayLeg) => {
     const isProp = leg.kind === "prop";
@@ -147,6 +151,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     setOddsFormatState(store<OddsFormat>("oddsfmt", "decimal"));
     setBankroll(store<number>("bank", 1000));
     setUnitPct(store<number>("unitpct", 1));
+    setTimeHorizonRaw(store<number>("timeHorizon", 24));
   }, [refresh]);
 
   const addBet = useCallback(
@@ -221,6 +226,8 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         updateBetResult,
         updateBetNote,
         removeBet,
+        timeHorizon,
+        setTimeHorizon,
         bankroll,
         setBankroll: (v) => { setBankroll(v); save("bank", v); },
         unitPct,

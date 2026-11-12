@@ -2,21 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
-import { totalLean, scheduleSpots, restTxt, teamRank, ord } from "@/lib/nba";
+import { totalLean, scheduleSpots, restTxt, teamRank, ord, TIME_OPTIONS } from "@/lib/nba";
 import type { TeamData, SlateGame } from "@/types";
 
 const tierCls = (r: number) => (r <= 10 ? "ok" : r >= 21 ? "bad" : "");
 const paceWord = (p: number) => (p >= 100 ? "fast" : p <= 98.5 ? "slow" : "avg");
-
-const TIME_OPTIONS_SL = [
-  { value: 24, label: "Today" },
-  { value: 48, label: "2 days" },
-  { value: 72, label: "3 days" },
-  { value: 120, label: "5 days" },
-  { value: 168, label: "1 week" },
-  { value: 336, label: "2 weeks" },
-  { value: 0, label: "All" },
-];
 
 function GameAnalysis({ g }: { g: SlateGame }) {
   const { state } = useNBA();
@@ -137,15 +127,13 @@ function GameAnalysis({ g }: { g: SlateGame }) {
 }
 
 export function SlateTab() {
-  const { state, focus, clearFocus } = useNBA();
+  const { state, focus, clearFocus, timeHorizon } = useNBA();
   const { SLATE, T } = state;
   const [hl, setHl] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [maxHours, setMaxHours] = useState(24);
 
-  const currentTimeLabel = TIME_OPTIONS_SL.find((o) => o.value === maxHours)?.label || `${Math.round(maxHours / 24)}d`;
   const nowMs = Date.now();
-  const cutoff = maxHours === 0 ? Infinity : nowMs + maxHours * 3600e3;
+  const cutoff = timeHorizon === 0 ? Infinity : nowMs + timeHorizon * 3600e3;
 
   const filteredSlate = SLATE.filter((g) => {
     if (!g.dt) return true;
@@ -177,19 +165,6 @@ export function SlateTab() {
       ) : (
         <>
           <div className="filters">
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>
-              <span>⏰ {currentTimeLabel}</span>
-              <input
-                type="range"
-                min={0}
-                max={TIME_OPTIONS_SL.length - 1}
-                step={1}
-                value={Math.max(0, TIME_OPTIONS_SL.findIndex((o) => o.value === maxHours))}
-                onChange={(e) => setMaxHours(TIME_OPTIONS_SL[+e.target.value].value)}
-                style={{ width: 72, cursor: "pointer" }}
-                title={`Show games within ${currentTimeLabel}`}
-              />
-            </label>
             <span className="note">{filteredSlate.length} of {SLATE.length} game{SLATE.length !== 1 ? "s" : ""}</span>
           </div>
           <div className="tbl-wrap">
@@ -221,7 +196,7 @@ export function SlateTab() {
                         <td>
                           <b>{g.away}</b> @ <b>{g.home}</b>
                         </td>
-                        <td className="note">{g.time}</td>
+                        <td className="note">{g.dt ? new Date(g.dt).toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + new Date(g.dt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : g.time}</td>
                         <td className="num">
                           {g.spread === 0 ? "—" : `${g.spread < 0 ? g.home : g.away} ${g.spread > 0 ? "+" : ""}${g.spread}`}
                         </td>

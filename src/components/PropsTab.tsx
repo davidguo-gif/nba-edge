@@ -8,7 +8,7 @@ import { decOdds, clamp, windows, hit } from "@/lib/nba";
 import { PropCardRow } from "./PropCard";
 
 export function PropsTab() {
-  const { state, applyOdds, focus, clearFocus } = useNBA();
+  const { state, applyOdds, focus, clearFocus, timeHorizon, setTimeHorizon } = useNBA();
   const { SLATE, PROPS, T, CTX, PLAYERS } = state;
   const [apiKey, setApiKey] = useState("");
   const [loadingOdds, setLoadingOdds] = useState(false);
@@ -21,25 +21,13 @@ export function PropsTab() {
   const [added, setAdded] = useState("");
   const [sortCol, setSortCol] = useState(""); // column key
   const [sortDir, setSortDir] = useState(1);
-  const [maxHours, setMaxHours] = useState(32); // default ~1.3 days (today)
-
-  const TIME_OPTIONS = [
-    { value: 24, label: "Today" },
-    { value: 48, label: "2 days" },
-    { value: 72, label: "3 days" },
-    { value: 120, label: "5 days" },
-    { value: 168, label: "1 week" },
-    { value: 336, label: "2 weeks" },
-    { value: 0, label: "All" },
-  ];
-  const currentTimeLabel = TIME_OPTIONS.find((o) => o.value === maxHours)?.label || `${Math.round(maxHours / 24)}d`;
 
   const filteredGames =
     gameFilter === "all" ? SLATE : SLATE.filter((g: SlateGame) => g.home === gameFilter || g.away === gameFilter);
 
-  // time-horizon cutoff
+  // time-horizon cutoff (shared from context)
   const now = new Date().getTime();
-  const horizonCutoff = maxHours === 0 ? Infinity : now + maxHours * 3600e3;
+  const horizonCutoff = timeHorizon === 0 ? Infinity : now + timeHorizon * 3600e3;
 
   const mf = marketFilter === "all" ? undefined : marketFilter;
 
@@ -52,7 +40,7 @@ export function PropsTab() {
     if (!gm) return false;
     if (gameFilter !== "all" && !filteredGames.includes(gm)) return false;
     // time-horizon: skip games beyond the selected window
-    if (gm.dt && maxHours > 0) {
+    if (gm.dt && timeHorizon > 0) {
       const gameTime = new Date(gm.dt).getTime();
       if (gameTime > horizonCutoff) return false;
     }
@@ -197,19 +185,6 @@ export function PropsTab() {
           <option value="lean">Lean & Strong</option>
         </select>
         <input placeholder="Search player..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} style={{ maxWidth: 180 }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>
-          <span>⏰ {currentTimeLabel}</span>
-          <input
-            type="range"
-            min={0}
-            max={TIME_OPTIONS.length - 1}
-            step={1}
-            value={Math.max(0, TIME_OPTIONS.findIndex((o) => o.value === maxHours))}
-            onChange={(e) => setMaxHours(TIME_OPTIONS[+e.target.value].value)}
-            style={{ width: 72, cursor: "pointer" }}
-            title={`Show props within ${currentTimeLabel}`}
-          />
-        </label>
         <span className="note">{sorted.length} props</span>
         {added && <span className="note ok">{added}</span>}
       </div>
