@@ -234,9 +234,11 @@ export function processData(S: NBAData, state: AppState): void {
   const teamKeys = Object.keys(state.T);
 
   // compute all-team stats + y26
-  const y26rows = rows.filter((r) => r[2] >= "2026-01-01");
+  // records (W-L, home/road, L10, streak, B2B) use the current season only;
+  // ratings/pace keep the blended sample from last season.
+  const curRows = S.rows || [];
   const TSall = teamStats(rows, teamKeys);
-  const TSy26 = teamStats(y26rows, teamKeys);
+  const TSy26 = teamStats(curRows, teamKeys);
 
   teamKeys.forEach((ab) => {
     const t = state.T[ab];
@@ -261,9 +263,20 @@ export function processData(S: NBAData, state: AppState): void {
       return;
     }
     Object.assign(t, s);
-    t.home = TS_HR(ab, (TSall as any).__games, true);
-    t.road = TS_HR(ab, (TSall as any).__games, false);
-    t.y26 = TSy26[ab];
+    const c = TSy26[ab];
+    Object.assign(t, {
+      w: c ? c.w : 0,
+      l: c ? c.l : 0,
+      gp: c ? c.gp : 0,
+      l10: c ? c.l10 : "-",
+      streak: c ? c.streak : "-",
+      b2bW: c ? c.b2bW : 0,
+      b2bL: c ? c.b2bL : 0,
+      b2bDrop: c ? c.b2bDrop : 0,
+    });
+    t.home = TS_HR(ab, (TSy26 as any).__games, true);
+    t.road = TS_HR(ab, (TSy26 as any).__games, false);
+    t.y26 = c;
   });
 
   // defense versus position
