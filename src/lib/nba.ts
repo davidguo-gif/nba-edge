@@ -666,28 +666,28 @@ export function scheduleSpots(g: SlateGame) {
     a = g.away;
   if (g.aRest === 0 && g.hRest >= 1)
     out.push({
-      t: `Road ${a} on B2B vs rested ${h}`,
-      l: "Tired road team tends to play worse: lean against it on the spread, or its team total Under (about 2-3 points worse)",
+      t: `${a} road B2B vs rested ${h}`,
+      l: `fade ${a} spread / team total U (about -2 to -3 pts)`,
     });
   if (g.hRest >= 3 && g.aRest <= 2)
     out.push({
-      t: `${h} has ${g.hRest}+ days rest vs traveling ${a}`,
-      l: "Rested home team has the edge: lean on its spread, or its first-half spread",
+      t: `${h} ${g.hRest}+ days rest vs traveling ${a}`,
+      l: `back ${h} spread / 1H spread (+1 to 2 pts)`,
     });
   if (g.hRest === 0 && g.aRest === 0)
     out.push({
       t: "Both teams on B2B",
-      l: "Lean on the game total Under (slower pace, sloppier play)",
+      l: "game total UNDER (slow pace, sloppy play)",
     });
   if (g.hFour || g.aFour)
     out.push({
       t: `4 games in 5 nights: ${g.hFour ? h : ""}${g.hFour && g.aFour ? " & " : ""}${g.aFour ? a : ""}`,
-      l: "Lean Under on totals, lean against the tired team, and watch fourth-quarter props",
+      l: "totals UNDER, fade tired team, Q4 props",
     });
   if (Math.abs(g.spread) <= 5)
     out.push({
       t: `Projected close game (spread ${g.spread > 0 ? "+" : ""}${g.spread})`,
-      l: "Fourth-quarter Under (including live betting); star players' points props lean Over because starters play more minutes in close games",
+      l: "Q4 UNDER / live UNDER; star pts Over (starters play more in close games)",
     });
   return out;
 }
@@ -699,31 +699,31 @@ export function totalLean(g: SlateGame): [string, string, string] {
     return [
       "UNDER",
       "bad",
-      "Tired legs (back-to-back or 4 games in 5 nights) slow the pace and hurt shooting, so scoring tends to be lower",
+      "tired legs (B2B / 4-in-5) = slower pace, worse shooting, fewer points",
     ];
   if (g.hRest === 0 || g.aRest === 0) {
     if (slow)
-      return ["UNDER", "bad", "One team is on a back-to-back and the matchup is slow-paced, so scoring should be low"];
+      return ["UNDER", "bad", "one team on B2B + slow pace = low scoring"];
     if (fast)
       return [
         "No strong lean",
         "blue",
-        "One team is tired but the matchup is fast-paced; the two effects roughly cancel out",
+        "one team on B2B but fast pace: effects cancel out",
       ];
     return [
       "Slight UNDER",
       "warn",
-      "One team is on a back-to-back, which usually trims scoring a little",
+      "one team on B2B: usually trims scoring a little",
     ];
   }
-  if (fast) return ["OVER", "ok", "Both teams are rested and play fast, so there are more possessions and more points"];
+  if (fast) return ["OVER", "ok", "both rested + fast pace = more possessions, more points"];
   if (g.hRest >= 3 && g.aRest >= 3)
-    return ["Slight OVER", "ok", "Both teams have had 3+ days off; fresh legs help scoring a little"];
+    return ["Slight OVER", "ok", "both teams 3+ days rest: fresh legs help scoring a bit"];
   if (slow)
-    return ["Slight UNDER", "warn", "Both teams play slow, defensive basketball, which holds scoring down a bit"];
+    return ["Slight UNDER", "warn", "both slow, defensive teams: scoring held down"];
   return [
     "No strong lean",
     "blue",
-    "Nothing pushes the total clearly up or down. Pass, or look at player props instead",
+    "nothing pushes total up or down: pass or look at props",
   ];
 }
