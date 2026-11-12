@@ -18,6 +18,19 @@ const MARKETS = [
   "player_blocks_steals",
   "player_double_double",
   "player_triple_double",
+  // quarter markets
+  "player_q1_points",
+  "player_q1_rebounds",
+  "player_q1_assists",
+  "player_q2_points",
+  "player_q2_rebounds",
+  "player_q2_assists",
+  "player_q3_points",
+  "player_q3_rebounds",
+  "player_q3_assists",
+  "player_q4_points",
+  "player_q4_rebounds",
+  "player_q4_assists",
 ];
 
 const TEAM_ABBR: Record<string, string> = {
@@ -145,6 +158,19 @@ export async function GET(req: NextRequest) {
             player_blocks_steals: "blk_stl",
             player_double_double: "dd",
             player_triple_double: "td",
+            // quarter markets
+            player_q1_points: "q1_pts",
+            player_q1_rebounds: "q1_reb",
+            player_q1_assists: "q1_ast",
+            player_q2_points: "q2_pts",
+            player_q2_rebounds: "q2_reb",
+            player_q2_assists: "q2_ast",
+            player_q3_points: "q3_pts",
+            player_q3_rebounds: "q3_reb",
+            player_q3_assists: "q3_ast",
+            player_q4_points: "q4_pts",
+            player_q4_rebounds: "q4_reb",
+            player_q4_assists: "q4_ast",
           };
           const mk = mkMap[m.key];
           if (!mk) return;

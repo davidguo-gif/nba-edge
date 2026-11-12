@@ -10,9 +10,10 @@ import { TeamsTab } from "./TeamsTab";
 import { SystemsTab } from "./SystemsTab";
 import { TrackerTab } from "./TrackerTab";
 import { DataTab } from "./DataTab";
+import { PropDetailView } from "./PropDetailView";
 
 export function AppShell() {
-  const { loading, error, activeTab, refresh, oddsFormat, setOddsFormat } = useNBA();
+  const { loading, error, activeTab, refresh, oddsFormat, setOddsFormat, propDetail } = useNBA();
 
   if (loading) {
     return (
@@ -85,6 +86,12 @@ export function AppShell() {
       <div style={{ display: activeTab === "data" ? "block" : "none" }}>
         <DataTab />
       </div>
+
+      {propDetail != null && (
+        <div style={{ display: activeTab !== "data" ? "block" : "none", paddingTop: 8 }}>
+          <PropDetailView />
+        </div>
+      )}
     </div>
   );
 }

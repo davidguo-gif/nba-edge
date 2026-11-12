@@ -16,6 +16,8 @@ interface NBAContextType {
   focus: { tab: string; player?: string; market?: string; gameId?: number | null } | null;
   goToLeg: (leg: ParlayLeg) => void;
   clearFocus: () => void;
+  propDetail: number | null;
+  setPropDetail: (id: number | null) => void;
   oddsFormat: OddsFormat;
   setOddsFormat: (f: OddsFormat) => void;
   parlay: ParlayLeg[];
@@ -56,6 +58,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [parlay, setParlay] = useState<ParlayLeg[]>([]);
   const [focus, setFocus] = useState<NBAContextType["focus"]>(null);
   const clearFocus = useCallback(() => setFocus(null), []);
+  const [propDetail, setPropDetail] = useState<number | null>(null);
   // jump from a parlay leg to the prop (Props tab) or game (Slate tab) it came from
   const goToLeg = useCallback((leg: ParlayLeg) => {
     const isProp = leg.kind === "prop";
@@ -204,6 +207,8 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         focus,
         goToLeg,
         clearFocus,
+        propDetail,
+        setPropDetail,
         oddsFormat,
         setOddsFormat,
         parlay,
