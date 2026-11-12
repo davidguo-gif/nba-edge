@@ -113,6 +113,7 @@ export interface NBAData {
   pl: Record<string, [string, string]>;
   slate: { date: string; games: { home: string; away: string; dt?: string; status?: string }[] };
   injuries: Record<string, Injury[]>;
+  adv?: Record<string, { pace: number; ortg: number; drtg: number; net: number }>;
 }
 
 export interface SyncedInfo {

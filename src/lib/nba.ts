@@ -277,6 +277,9 @@ export function processData(S: NBAData, state: AppState): void {
     t.home = TS_HR(ab, (TSy26 as any).__games, true);
     t.road = TS_HR(ab, (TSy26 as any).__games, false);
     t.y26 = c;
+    // official NBA.com pace / ratings for the current season override the box-score estimate
+    const a = S.adv && S.adv[ab];
+    if (a) Object.assign(t, a);
   });
 
   // defense versus position

@@ -25,7 +25,8 @@ import ssl
 from datetime import datetime, timedelta, timezone
 
 try:
-    from nba_api.stats.endpoints import LeagueGameLog, PlayerIndex
+    from nba_api.stats.endpoints import LeagueGameLog, PlayerIndex, LeagueDashTeamStats
+    from nba_api.stats.static import teams as nba_teams
     from nba_api.live.nba.endpoints import scoreboard
 except ImportError:
     sys.exit("nba_api is not installed. Run:  pip install nba_api")
@@ -190,8 +191,19 @@ def main():
     except Exception as e:  # noqa: BLE001
         print(f"  schedule unavailable ({e}); Slate tab will be empty")
 
+    adv = {}
+    try:  # official NBA.com pace / ratings
+        ab = {t["id"]: t["abbreviation"] for t in nba_teams.get_teams()}
+        d = call("official advanced team stats", lambda: LeagueDashTeamStats(
+            season=season, measure_type_detailed_defense="Advanced", per_mode_detailed="PerGame", timeout=TIMEOUT).get_dict())
+        for r in result_set(d):
+            if r["TEAM_ID"] in ab:
+                adv[ab[r["TEAM_ID"]]] = {"pace": r["PACE"], "ortg": r["OFF_RATING"], "drtg": r["DEF_RATING"], "net": r["NET_RATING"]}
+    except Exception as e:  # noqa: BLE001
+        print(f"  official advanced stats unavailable ({e}); falling back to box-score estimates")
+
     data = {"generated": datetime.now(timezone.utc).isoformat(), "season": season, "source": "nba_api",
-            "rows": rows, "prev": prev_rows, "pl": pl, "slate": slate, "injuries": injuries}
+            "rows": rows, "prev": prev_rows, "pl": pl, "slate": slate, "injuries": injuries, "adv": adv}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, separators=(",", ":"))
     last = max((r[2] for r in rows), default="n/a")

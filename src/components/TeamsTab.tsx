@@ -104,8 +104,7 @@ export function TeamsTab() {
       </p>
       <div className="filters">
         <select value={view} onChange={(e) => setView(e.target.value)}>
-          <option value="current">Current season (ratings blended with last season)</option>
-          {sy && <option value="cur-only">Current season only</option>}
+          <option value="current">Current season</option>
           {pastSeasons.map((s) => (
             <option key={s} value={s}>
               {s} season (full regular season)

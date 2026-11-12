@@ -34,15 +34,43 @@ async function teamLog(season) {
   throw new Error(`could not fetch ${season}`);
 }
 
-function computeSeason(rows) {
+// Official NBA.com advanced numbers (pace / ORtg / DRtg / Net), keyed by TEAM_ID.
+async function advancedLog(season) {
+  const u =
+    `https://stats.nba.com/stats/leaguedashteamstats?MeasureType=Advanced&PerMode=PerGame&Season=${season}` +
+    "&SeasonType=Regular+Season&LeagueID=00&Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&LastNGames=0&Location=&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&SeasonSegment=&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision=";
+  for (let i = 1; i <= 4; i++) {
+    try {
+      const r = await fetch(u, {
+        headers: { "User-Agent": "Mozilla/5.0", Referer: "https://www.nba.com/", Origin: "https://www.nba.com" },
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const rs = (await r.json()).resultSets[0];
+      return Object.fromEntries(
+        rs.rowSet.map((row) => {
+          const o = Object.fromEntries(rs.headers.map((h, j) => [h, row[j]]));
+          return [o.TEAM_ID, { pace: o.PACE, ortg: o.OFF_RATING, drtg: o.DEF_RATING, net: o.NET_RATING }];
+        }),
+      );
+    } catch (e) {
+      console.log(`  ${season} advanced attempt ${i} failed: ${e.message}`);
+      await new Promise((r) => setTimeout(r, 5000 * i));
+    }
+  }
+  throw new Error(`could not fetch advanced ${season}`);
+}
+
+function computeSeason(rows, adv) {
   const byGame = {};
   rows.forEach((r) => (byGame[r.GAME_ID] ||= []).push(r));
   const games = {};
   rows.forEach((r) => {
     const o = (byGame[r.GAME_ID] || []).find((x) => x.TEAM_ABBREVIATION !== r.TEAM_ABBREVIATION);
     if (!o) return;
-    const poss =
-      (r.FGA + 0.44 * r.FTA - r.OREB + r.TOV + (o.FGA + 0.44 * o.FTA - o.OREB + o.TOV)) / 2;
+    // NBA.com possession formula
+    const tp = (a, b) => a.FGA + 0.4 * a.FTA - 1.07 * (a.OREB / (a.OREB + b.DREB)) * (a.FGA - a.FGM) + a.TOV;
+    const poss = (tp(r, o) + tp(o, r)) / 2;
     (games[r.TEAM_ABBREVIATION] ||= []).push({
       date: r.GAME_DATE.slice(0, 10),
       home: r.MATCHUP.includes("vs.") ? 1 : 0,
@@ -53,6 +81,8 @@ function computeSeason(rows) {
     });
   });
 
+  const idOf = {};
+  rows.forEach((r) => (idOf[r.TEAM_ABBREVIATION] = r.TEAM_ID));
   const out = {};
   for (const [ab, g] of Object.entries(games)) {
     g.sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -98,6 +128,7 @@ function computeSeason(rows) {
       b2bW,
       b2bL,
       b2bDrop: +(mean(nm) - mean(bm)).toFixed(1),
+      ...(adv[idOf[ab]] || {}),
       home: hr(1),
       road: hr(0),
     };
@@ -113,7 +144,8 @@ for (let k = 1; k <= COUNT; k++) {
     continue;
   }
   console.log(`${season}: fetching...`);
-  existing[season] = computeSeason(await teamLog(season));
+  const log = await teamLog(season);
+  existing[season] = computeSeason(log, await advancedLog(season));
   console.log(`${season}: ${Object.keys(existing[season]).length} teams`);
   await new Promise((r) => setTimeout(r, 1500));
 }
