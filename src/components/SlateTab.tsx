@@ -8,6 +8,16 @@ import type { TeamData, SlateGame } from "@/types";
 const tierCls = (r: number) => (r <= 10 ? "ok" : r >= 21 ? "bad" : "");
 const paceWord = (p: number) => (p >= 100 ? "fast" : p <= 98.5 ? "slow" : "avg");
 
+const TIME_OPTIONS_SL = [
+  { value: 24, label: "Today" },
+  { value: 48, label: "2 days" },
+  { value: 72, label: "3 days" },
+  { value: 120, label: "5 days" },
+  { value: 168, label: "1 week" },
+  { value: 336, label: "2 weeks" },
+  { value: 0, label: "All" },
+];
+
 function GameAnalysis({ g }: { g: SlateGame }) {
   const { state } = useNBA();
   const { T } = state;
@@ -131,6 +141,16 @@ export function SlateTab() {
   const { SLATE, T } = state;
   const [hl, setHl] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [maxHours, setMaxHours] = useState(24);
+
+  const currentTimeLabel = TIME_OPTIONS_SL.find((o) => o.value === maxHours)?.label || `${Math.round(maxHours / 24)}d`;
+  const nowMs = Date.now();
+  const cutoff = maxHours === 0 ? Infinity : nowMs + maxHours * 3600e3;
+
+  const filteredSlate = SLATE.filter((g) => {
+    if (!g.dt) return true;
+    return new Date(g.dt).getTime() <= cutoff;
+  });
 
   useEffect(() => {
     if (!focus || focus.tab !== "slate" || focus.gameId == null) return;
@@ -150,14 +170,27 @@ export function SlateTab() {
 
   return (
     <div>
-      <h2>Tonight&apos;s Slate</h2>
+      <h2>Slate</h2>
       <p className="sub">Our projections (not sportsbook lines). Rankings: 1 = best of 30 teams. Click a game for full analysis.</p>
       {SLATE.length === 0 ? (
-        <p className="note">No games scheduled for tonight. Check back later.</p>
+        <p className="note">No games scheduled. Check back later.</p>
       ) : (
         <>
           <div className="filters">
-            <span className="note">{SLATE.length} games — click a row for analysis & bet ideas</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>
+              <span>⏰ {currentTimeLabel}</span>
+              <input
+                type="range"
+                min={0}
+                max={TIME_OPTIONS_SL.length - 1}
+                step={1}
+                value={Math.max(0, TIME_OPTIONS_SL.findIndex((o) => o.value === maxHours))}
+                onChange={(e) => setMaxHours(TIME_OPTIONS_SL[+e.target.value].value)}
+                style={{ width: 72, cursor: "pointer" }}
+                title={`Show games within ${currentTimeLabel}`}
+              />
+            </label>
+            <span className="note">{filteredSlate.length} of {SLATE.length} game{SLATE.length !== 1 ? "s" : ""}</span>
           </div>
           <div className="tbl-wrap">
             <table>
@@ -174,7 +207,7 @@ export function SlateTab() {
                 </tr>
               </thead>
               <tbody>
-                {SLATE.map((g) => {
+                {filteredSlate.map((g) => {
                   const tl = totalLean(g);
                   const leanColor =
                     tl[1] === "ok" ? "var(--green)" : tl[1] === "bad" ? "var(--red)" : tl[1] === "warn" ? "#fcd34d" : "var(--mut)";
