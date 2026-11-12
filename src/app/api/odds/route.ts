@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const API = "https://api.the-odds-api.com/v4/sports/basketball_nba";
-const MARKETS = [
+const MAIN_MARKETS = [
   "player_points",
   "player_rebounds",
   "player_assists",
@@ -18,7 +18,9 @@ const MARKETS = [
   "player_blocks_steals",
   "player_double_double",
   "player_triple_double",
-  // quarter markets
+];
+
+const QUARTER_MARKETS = [
   "player_q1_points",
   "player_q1_rebounds",
   "player_q1_assists",
@@ -133,61 +135,71 @@ export async function GET(req: NextRequest) {
         live: true,
       });
 
-      const oddsUrl = `${API}/events/${ev.id}/odds?apiKey=${key}&regions=us&markets=${MARKETS.join(",")}&oddsFormat=american`;
-      const oddsRes = await fetch(oddsUrl);
-      if (!oddsRes.ok) continue;
+      const MK_MAP: Record<string, string> = {
+        player_points: "pts",
+        player_rebounds: "reb",
+        player_assists: "ast",
+        player_threes: "fg3",
+        player_points_rebounds_assists: "pra",
+        player_points_assists: "pts_ast",
+        player_points_rebounds: "pts_reb",
+        player_rebounds_assists: "reb_ast",
+        player_steals: "stl",
+        player_blocks: "blk",
+        player_turnovers: "tov",
+        player_blocks_steals: "blk_stl",
+        player_double_double: "dd",
+        player_triple_double: "td",
+        // quarter markets
+        player_q1_points: "q1_pts",
+        player_q1_rebounds: "q1_reb",
+        player_q1_assists: "q1_ast",
+        player_q2_points: "q2_pts",
+        player_q2_rebounds: "q2_reb",
+        player_q2_assists: "q2_ast",
+        player_q3_points: "q3_pts",
+        player_q3_rebounds: "q3_reb",
+        player_q3_assists: "q3_ast",
+        player_q4_points: "q4_pts",
+        player_q4_rebounds: "q4_reb",
+        player_q4_assists: "q4_ast",
+      };
 
-      const data = await oddsRes.json();
+      // Fetch main markets and quarter markets separately so quarter failures don't kill everything
+      const marketGroups = [
+        { markets: MAIN_MARKETS, group: "main" },
+        { markets: QUARTER_MARKETS, group: "quarter" },
+      ];
+
       const acc: Record<string, any> = {};
       const names: Record<string, string> = {};
 
-      data.bookmakers.forEach((bk: any) => {
-        bk.markets.forEach((m: any) => {
-          const mkMap: Record<string, string> = {
-            player_points: "pts",
-            player_rebounds: "reb",
-            player_assists: "ast",
-            player_threes: "fg3",
-            player_points_rebounds_assists: "pra",
-            player_points_assists: "pts_ast",
-            player_points_rebounds: "pts_reb",
-            player_rebounds_assists: "reb_ast",
-            player_steals: "stl",
-            player_blocks: "blk",
-            player_turnovers: "tov",
-            player_blocks_steals: "blk_stl",
-            player_double_double: "dd",
-            player_triple_double: "td",
-            // quarter markets
-            player_q1_points: "q1_pts",
-            player_q1_rebounds: "q1_reb",
-            player_q1_assists: "q1_ast",
-            player_q2_points: "q2_pts",
-            player_q2_rebounds: "q2_reb",
-            player_q2_assists: "q2_ast",
-            player_q3_points: "q3_pts",
-            player_q3_rebounds: "q3_reb",
-            player_q3_assists: "q3_ast",
-            player_q4_points: "q4_pts",
-            player_q4_rebounds: "q4_reb",
-            player_q4_assists: "q4_ast",
-          };
-          const mk = mkMap[m.key];
-          if (!mk) return;
+      for (const { markets, group } of marketGroups) {
+        const oddsUrl = `${API}/events/${ev.id}/odds?apiKey=${key}&regions=us&markets=${markets.join(",")}&oddsFormat=american`;
+        const oddsRes = await fetch(oddsUrl);
+        if (!oddsRes.ok) continue;
 
-          m.outcomes.forEach((o: any) => {
-            const k = norm(o.description) + "|" + mk;
-            if (!acc[k]) acc[k] = {};
-            names[k] = o.description;
-            if (!acc[k][bk.title]) {
-              acc[k][bk.title] = { book: bk.title, line: o.point };
-            }
-            acc[k][bk.title].line = o.point;
-            if (o.name === "Over") acc[k][bk.title].over = o.price;
-            else if (o.name === "Under") acc[k][bk.title].under = o.price;
+        const data = await oddsRes.json();
+
+        data.bookmakers.forEach((bk: any) => {
+          bk.markets.forEach((m: any) => {
+            const mk = MK_MAP[m.key];
+            if (!mk) return;
+
+            m.outcomes.forEach((o: any) => {
+              const k = norm(o.description) + "|" + mk;
+              if (!acc[k]) acc[k] = {};
+              names[k] = o.description;
+              if (!acc[k][bk.title]) {
+                acc[k][bk.title] = { book: bk.title, line: o.point };
+              }
+              acc[k][bk.title].line = o.point;
+              if (o.name === "Over") acc[k][bk.title].over = o.price;
+              else if (o.name === "Under") acc[k][bk.title].under = o.price;
+            });
           });
         });
-      });
+      }
 
       Object.entries(acc).forEach(([key, bookData]: [string, any]) => {
         const books = Object.values(bookData).filter(
