@@ -9,7 +9,8 @@ import type {
   NBAData,
   Injury,
 } from "@/types";
-import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS } from "@/types";
+import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL } from "@/types";
+const posGroup = posGroupImport;
 
 /* ---------- state ---------- */
 export interface AppState {
@@ -110,9 +111,6 @@ const todayET = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_
 const addDays = (d: string, n: number) =>
   new Date(Date.parse(d + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 const dayNum = (d: string) => Math.round(Date.parse(d + "T00:00:00Z") / 864e5);
-const posGroup = (p: string) =>
-  p === "G" || p === "G-F" ? "G" : p === "C" || p === "C-F" ? "C" : "W";
-
 function baseRows(S: NBAData): any[][] {
   return S.rows ? S.rows.concat(S.prev || []) : [];
 }
@@ -312,7 +310,6 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
 
   // defense versus position
   const K = ["pts", "reb", "ast", "fg3"];
-  const IDX: Record<string, number> = { pts: 8, reb: 9, ast: 10, fg3: 11 };
   const DV: Record<string, Record<string, Record<string, number>>> = {};
   rows.forEach((r: any[]) => {
     const pg = posGroup((S.pl[r[6]] || [])[1] || "");
@@ -320,7 +317,7 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
     if (!DV[r[4]][pg]) DV[r[4]][pg] = { pts: 0, reb: 0, ast: 0, fg3: 0 };
     const d = DV[r[4]][pg];
     K.forEach((k) => {
-      d[k] += r[IDX[k]];
+      d[k] += r[STAT_IDX[k]];
     });
   });
 
@@ -413,10 +410,14 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
       name: m[0],
       team,
       pos: posGroup(m[1]),
+      posRaw: m[1] || "",
       pts: av("pts"),
       reb: av("reb"),
       ast: av("ast"),
       fg3: av("fg3"),
+      stl: av("stl"),
+      blk: av("blk"),
+      tov: av("tov"),
       min: av("min"),
       log,
     });
@@ -524,8 +525,17 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
       // prefer the player whose team is in the game this prop belongs to
       const pl = cands.find((p) => op.team?.includes(p.team)) || cands[0];
       if (!pl) return;
-      const proj =
-        op.market === "pra" ? pl.pts + pl.reb + pl.ast : (pl as any)[op.market];
+      const proj = (() => {
+        if (!AVG_MARKETS.includes(op.market)) return null;
+        switch (op.market) {
+          case "pra": return pl.pts + pl.reb + pl.ast;
+          case "pts_ast": return pl.pts + pl.ast;
+          case "pts_reb": return pl.pts + pl.reb;
+          case "reb_ast": return pl.reb + pl.ast;
+          case "blk_stl": return pl.blk + pl.stl;
+          default: return (pl as any)[op.market] ?? 0;
+        }
+      })();
       state.PROPS.push({
         id: state.PROPS.length,
         pid: pl.id,
@@ -577,12 +587,20 @@ export function record(games: any[], k: string, line: number) {
 
 const POS_WORD: Record<string, string> = { G: "guards", W: "wings", C: "centers" };
 export const posWord = (p: string) => POS_WORD[p] || "players at this position";
+/** Full display name for a player's raw position string (e.g. "G" -> "Guard"). */
+export const posFull = (raw: string): string => POS_LABEL[raw] || (raw || "N/A");
+
 const MKT_WORD: Record<string, string> = {
-  pts: "points",
-  reb: "rebounds",
-  ast: "assists",
-  fg3: "3-pointers",
+  pts: "points", reb: "rebounds", ast: "assists", fg3: "3-pointers",
   pra: "points + rebounds + assists",
+  pts_ast: "points + assists", pts_reb: "points + rebounds", reb_ast: "rebounds + assists",
+  stl: "steals", blk: "blocks", tov: "turnovers", blk_stl: "blocks + steals",
+  dd: "double-doubles", td: "triple-doubles",
+  fg_pct: "FG%", ft_pct: "FT%",
+  q1_pts: "first-quarter points", q1_reb: "first-quarter rebounds", q1_ast: "first-quarter assists",
+  q2_pts: "second-quarter points", q2_reb: "second-quarter rebounds", q2_ast: "second-quarter assists",
+  q3_pts: "third-quarter points", q3_reb: "third-quarter rebounds", q3_ast: "third-quarter assists",
+  q4_pts: "fourth-quarter points", q4_reb: "fourth-quarter rebounds", q4_ast: "fourth-quarter assists",
 };
 export const mktWord = (m: string) => MKT_WORD[m] || m;
 

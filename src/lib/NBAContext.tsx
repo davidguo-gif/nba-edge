@@ -24,8 +24,9 @@ interface NBAContextType {
   updateLegOdds: (id: string, odds: number) => void;
   removeLeg: (id: string) => void;
   bets: Bet[];
-  addBet: (desc: string, book: string, odds: number, units: number) => void;
+  addBet: (desc: string, book: string, odds: number, units: number, note?: string) => void;
   updateBetResult: (id: number | string, result: "pending" | "win" | "loss" | "push") => void;
+  updateBetNote: (id: number | string, note: string) => void;
   removeBet: (id: number | string) => void;
   bankroll: number;
   setBankroll: (v: number) => void;
@@ -146,7 +147,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const addBet = useCallback(
-    (desc: string, book: string, odds: number, units: number) => {
+    (desc: string, book: string, odds: number, units: number, note?: string) => {
       const newBet: Bet = {
         id: Date.now() + Math.random(),
         date: new Date().toISOString().slice(0, 10),
@@ -155,6 +156,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         odds,
         units,
         result: "pending",
+        note,
       };
       const next = [...bets, newBet];
       setBets(next);
@@ -174,6 +176,14 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     [bets],
   );
 
+  const updateBetNote = useCallback(
+    (id: number | string, note: string) => {
+      const next = bets.map((b) => (String(b.id) === String(id) ? { ...b, note } : b));
+      setBets(next);
+      save("bets", next);
+    },
+    [bets],
+  );
   const removeBet = useCallback(
     (id: number | string) => {
       const next = bets.filter((b) => String(b.id) !== String(id));
@@ -204,6 +214,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         bets,
         addBet,
         updateBetResult,
+        updateBetNote,
         removeBet,
         bankroll,
         setBankroll: (v) => { setBankroll(v); save("bank", v); },

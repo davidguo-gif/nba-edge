@@ -9,6 +9,15 @@ const MARKETS = [
   "player_assists",
   "player_threes",
   "player_points_rebounds_assists",
+  "player_points_assists",
+  "player_points_rebounds",
+  "player_rebounds_assists",
+  "player_steals",
+  "player_blocks",
+  "player_turnovers",
+  "player_blocks_steals",
+  "player_double_double",
+  "player_triple_double",
 ];
 
 const TEAM_ABBR: Record<string, string> = {
@@ -127,6 +136,15 @@ export async function GET(req: NextRequest) {
             player_assists: "ast",
             player_threes: "fg3",
             player_points_rebounds_assists: "pra",
+            player_points_assists: "pts_ast",
+            player_points_rebounds: "pts_reb",
+            player_rebounds_assists: "reb_ast",
+            player_steals: "stl",
+            player_blocks: "blk",
+            player_turnovers: "tov",
+            player_blocks_steals: "blk_stl",
+            player_double_double: "dd",
+            player_triple_double: "td",
           };
           const mk = mkMap[m.key];
           if (!mk) return;

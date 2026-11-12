@@ -3,16 +3,9 @@
 import { useState, useEffect } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import type { SlateGame } from "@/types";
+import { MARKET_NAMES } from "@/types";
 import { decOdds, clamp, windows, hit } from "@/lib/nba";
-import { PropCard } from "./PropCard";
-
-const MK: Record<string, string> = {
-  pts: "PTS",
-  reb: "REB",
-  ast: "AST",
-  fg3: "3PM",
-  pra: "PRA",
-};
+import { PropCardRow } from "./PropCard";
 
 export function PropsTab() {
   const { state, applyOdds, focus, clearFocus } = useNBA();
@@ -26,13 +19,15 @@ export function PropsTab() {
   const [searchQ, setSearchQ] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [added, setAdded] = useState("");
+  const [sortCol, setSortCol] = useState(""); // column key
+  const [sortDir, setSortDir] = useState(1);
 
   const filteredGames =
     gameFilter === "all" ? SLATE : SLATE.filter((g: SlateGame) => g.home === gameFilter || g.away === gameFilter);
 
   const mf = marketFilter === "all" ? undefined : marketFilter;
 
-  const filteredProps = PROPS.filter((p) => {
+  const rawProps = PROPS.filter((p) => {
     const pl = PLAYERS[p.pid];
     if (!pl) return false;
     const c = CTX[pl.team];
@@ -69,33 +64,52 @@ export function PropsTab() {
     return true;
   });
 
-  // arriving from a parlay leg: show that prop, expanded, scrolled into view
-  useEffect(() => {
-    if (!focus || focus.tab !== "props") return;
-    const p = PROPS.find(
-      (x) => PLAYERS[x.pid]?.name === focus.player && x.market === focus.market,
-    );
-    if (!p) {
-      flash("That prop isn't loaded right now (fetch live odds to see it).");
-      clearFocus();
-      return;
+  // sorting
+  const colSorter = (p: any): string | number => {
+    const pl = PLAYERS[p.pid];
+    if (!pl) return 0;
+    const a = p._analysis;
+    switch (sortCol) {
+      case "player": return pl.name;
+      case "game": return pl.team;
+      case "market": return p.market;
+      case "line": return p.line;
+      case "edge": return a.best?.ev ?? -1;
+      case "hit": {
+        const w = windows(pl, state.seasonStart);
+        const r = w.cur.length ? w.cur.filter((g: any) => g[p.market] > p.line).length / w.cur.length : 0;
+        return r;
+      }
+      case "conf": return { Strong: 3, Lean: 2, Pass: 1 }[a.conf] ?? 0;
+      case "def": return a.rank ?? 15;
+      default: return 0;
     }
-    setGameFilter("all");
-    setMarketFilter("all");
-    setLeanFilter("all");
-    setSearchQ("");
-    setOpen(p.id);
-    clearFocus();
-    setTimeout(() => {
-      document.getElementById(`prop-card-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 150);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focus]);
+  };
+  const sorted = sortCol
+    ? [...rawProps].sort((a, b) => {
+        const va = colSorter(a), vb = colSorter(b);
+        const d = typeof va === "string" ? String(va).localeCompare(String(vb)) : (va as number) - (vb as number);
+        return d * sortDir || 0;
+      })
+    : rawProps;
 
   useEffect(() => {
     const stored = localStorage.getItem("nbaedge.apikey");
     if (stored) setApiKey(stored);
   }, []);
+
+  // focus from parlay leg
+  useEffect(() => {
+    if (!focus || focus.tab !== "props") return;
+    const p = PROPS.find((x) => PLAYERS[x.pid]?.name === focus.player && x.market === focus.market);
+    if (!p) { setAdded("That prop isn't loaded right now."); clearFocus(); return; }
+    setGameFilter("all"); setMarketFilter("all"); setLeanFilter("all"); setSearchQ("");
+    setOpen(p.id);
+    clearFocus();
+    setTimeout(() => {
+      document.getElementById(`prop-row-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+  }, [focus]);
 
   const fetchOdds = async () => {
     if (!apiKey) return;
@@ -118,99 +132,88 @@ export function PropsTab() {
     }
   };
 
-  const flash = (msg: string) => {
-    setAdded(msg);
-    setTimeout(() => setAdded(""), 2500);
+  const toggleSort = (c: string) => {
+    if (sortCol === c) setSortDir(-sortDir);
+    else { setSortCol(c); setSortDir(1); }
   };
+  const sc = (c: string) => sortCol === c ? (sortDir > 0 ? " ▲" : " ▼") : "";
 
   return (
     <div>
       <h2>Player Props</h2>
-      <p className="sub">
-        Fetch live lines with your Odds API key. Click a card for the game-by-game graph, head-to-head and a line
-        slider. &ldquo;+ Parlay&rdquo; sends a pick to the Parlay Builder.
-      </p>
+      <p className="sub">Fetch live lines with your Odds API key. Click a row for the full breakdown with graph and line slider.</p>
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="form">
           <label>
-            The Odds API key
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your key"
-            />
+            API key
+            <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="the-odds-api.com key" />
           </label>
           <button className="b" onClick={fetchOdds} disabled={loadingOdds || !apiKey}>
-            {loadingOdds ? "Loading..." : "Fetch live odds"}
+            {loadingOdds ? "Loading..." : "Fetch odds"}
           </button>
           {oddsStatus && <span className="note">{oddsStatus}</span>}
-          <button
-            className="b alt sm"
-            onClick={() => {
-              localStorage.removeItem("nbaedge.apikey");
-              localStorage.removeItem("nbaedge.odds");
-              window.location.reload();
-            }}
-          >
-            Clear &amp; reload
-          </button>
+          <button className="b alt sm" onClick={() => {
+            localStorage.removeItem("nbaedge.apikey");
+            localStorage.removeItem("nbaedge.odds");
+            window.location.reload();
+          }}>Clear</button>
         </div>
       </div>
 
       <div className="filters">
         <select value={gameFilter} onChange={(e) => setGameFilter(e.target.value)}>
           <option value="all">All games</option>
-          {SLATE.map((g, i) => (
-            <option key={i} value={g.home}>
-              {g.away} @ {g.home}
-            </option>
-          ))}
+          {SLATE.map((g, i) => (<option key={i} value={g.home}>{g.away} @ {g.home}</option>))}
         </select>
         <select value={marketFilter} onChange={(e) => setMarketFilter(e.target.value)}>
           <option value="all">All markets</option>
-          {Object.entries(MK).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
+          {Object.entries(MARKET_NAMES).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
         </select>
         <select value={leanFilter} onChange={(e) => setLeanFilter(e.target.value)}>
-          <option value="all">All confidence</option>
+          <option value="all">All conf</option>
           <option value="strong">Strong only</option>
-          <option value="lean">Leans &amp; Strong</option>
+          <option value="lean">Lean & Strong</option>
         </select>
-        <input
-          placeholder="Search player..."
-          value={searchQ}
-          onChange={(e) => setSearchQ(e.target.value)}
-          style={{ maxWidth: 200 }}
-        />
-        <span className="note">{filteredProps.length} props</span>
+        <input placeholder="Search player..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} style={{ maxWidth: 180 }} />
+        <span className="note">{sorted.length} props</span>
         {added && <span className="note ok">{added}</span>}
       </div>
 
-      <div className="grid g2">
-        {filteredProps.map((p: any) => {
-          const pl = PLAYERS[p.pid];
-          if (!pl) return null;
-          const c = CTX[pl.team];
-          const gm = c ? SLATE[c.gid] : null;
-          return (
-            <div key={p.id} id={`prop-card-${p.id}`} style={{ scrollMarginTop: 8 }}>
-            <PropCard
-              p={p}
-              pl={pl}
-              gm={gm}
-              a={p._analysis}
-              open={open === p.id}
-              onToggle={() => setOpen(open === p.id ? null : p.id)}
-              onAdded={flash}
-            />
-            </div>
-          );
-        })}
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onClick={() => toggleSort("player")}>Player{sc("player")}</th>
+              <th onClick={() => toggleSort("game")}>Game{sc("game")}</th>
+              <th onClick={() => toggleSort("market")}>Market{sc("market")}</th>
+              <th onClick={() => toggleSort("line")} className="num">Line{sc("line")}</th>
+              <th onClick={() => toggleSort("edge")}>Pick / Edge{sc("edge")}</th>
+              <th onClick={() => toggleSort("hit")}>Hit rate{sc("hit")}</th>
+              <th onClick={() => toggleSort("def")} className="num">Def{sc("def")}</th>
+              <th onClick={() => toggleSort("conf")}>Conf{sc("conf")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((p: any) => {
+              const pl = PLAYERS[p.pid];
+              if (!pl) return null;
+              const c = CTX[pl.team];
+              const gm = c ? SLATE[c.gid] : null;
+              return (
+                <PropCardRow
+                  key={p.id}
+                  p={p}
+                  pl={pl}
+                  gm={gm}
+                  a={p._analysis}
+                  open={open === p.id}
+                  onToggle={() => setOpen(open === p.id ? null : p.id)}
+                />
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
