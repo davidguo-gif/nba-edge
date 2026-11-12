@@ -46,7 +46,8 @@ function cell(x: any, k: string): string {
     case "b2bW":
       return `${x.b2bW}-${x.b2bL}`;
     case "b2bDrop":
-      return `-${x.b2bDrop}`;
+      // drop > 0: margin falls on back-to-backs (shown as a minus); drop < 0: team does better on them
+      return x.b2bDrop > 0 ? `-${x.b2bDrop}` : x.b2bDrop < 0 ? `+${Math.abs(x.b2bDrop)}` : "0";
     case "home":
     case "road":
     case "l10":
