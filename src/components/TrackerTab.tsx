@@ -1,12 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { decOdds } from "@/lib/nba";
 import { fmtOdds } from "@/lib/odds";
 import { OddsInput } from "./OddsInput";
 import { NumInput } from "./NumInput";
 import { BOOK_URLS } from "@/types";
+
+type DateFilter = "today" | "3d" | "week" | "month" | "season" | "all";
+
+const FILTER_OPTIONS: { value: DateFilter; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "3d", label: "Last 3 days" },
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+  { value: "season", label: "This season" },
+  { value: "all", label: "All time" },
+];
+
+const todayET = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const dateStr = d.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "America/New_York" });
+  const timeStr = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  return `${dateStr} ${timeStr}`;
+}
+
+function dateInRange(isoDate: string, filter: DateFilter): boolean {
+  const betDate = isoDate.slice(0, 10); // YYYY-MM-DD
+  const today = todayET();
+
+  switch (filter) {
+    case "today":
+      return betDate === today;
+    case "3d": {
+      const d = new Date(today + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() - 3);
+      return betDate >= d.toISOString().slice(0, 10);
+    }
+    case "week": {
+      const d = new Date(today + "T00:00:00Z");
+      const day = d.getUTCDay();
+      const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Monday
+      d.setUTCDate(diff);
+      return betDate >= d.toISOString().slice(0, 10);
+    }
+    case "month": {
+      const m = today.slice(0, 7); // YYYY-MM
+      return betDate.slice(0, 7) === m;
+    }
+    case "season": {
+      const year = +today.slice(0, 4);
+      const month = +today.slice(5, 7);
+      const seasonStart = month >= 10 ? `${year}-10-01` : `${year - 1}-08-01`;
+      return betDate >= seasonStart;
+    }
+    default:
+      return true;
+  }
+}
 
 export function TrackerTab() {
   const {
@@ -24,6 +78,7 @@ export function TrackerTab() {
   const [book, setBook] = useState("DraftKings");
   const [odds, setOdds] = useState(-110);
   const [units, setUnits] = useState(1);
+  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
 
   const unit = (bankroll * unitPct) / 100;
   const profit = (b: (typeof bets)[0]) =>
@@ -32,6 +87,13 @@ export function TrackerTab() {
       : b.result === "loss"
         ? -b.units
         : 0;
+
+  const filteredBets = useMemo(
+    () => [...bets].filter((b) => dateInRange(b.date, dateFilter)).reverse(),
+    [bets, dateFilter],
+  );
+
+  const allReverse = useMemo(() => [...bets].reverse(), [bets]);
 
   const settled = bets.filter((b) => b.result !== "pending");
   const staked = settled
@@ -128,11 +190,20 @@ export function TrackerTab() {
         </div>
       </div>
 
+      <div className="filters">
+        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)}>
+          {FILTER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <span className="note">{filteredBets.length} bet{filteredBets.length !== 1 ? "s" : ""}</span>
+      </div>
+
       <div className="tbl-wrap">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
+              <th>Time</th>
               <th>Bet</th>
               <th>Book</th>
               <th className="num">Odds</th>
@@ -143,9 +214,9 @@ export function TrackerTab() {
             </tr>
           </thead>
           <tbody>
-            {[...bets].reverse().map((b) => (
+            {filteredBets.map((b) => (
               <tr key={b.id}>
-                <td>{b.date}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(b.date)}</td>
                 <td>
                   {b.desc}
                   {b.units > 3 && (
@@ -193,10 +264,10 @@ export function TrackerTab() {
                 </td>
               </tr>
             ))}
-            {bets.length === 0 && (
+            {filteredBets.length === 0 && (
               <tr>
                 <td colSpan={8} className="note">
-                  No bets yet. Add one above or from a prop.
+                  {dateFilter === "today" ? "No bets placed today." : `No bets in this period.`}
                 </td>
               </tr>
             )}

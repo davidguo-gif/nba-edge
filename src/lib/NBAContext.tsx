@@ -153,7 +153,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     (desc: string, book: string, odds: number, units: number, note?: string) => {
       const newBet: Bet = {
         id: Date.now() + Math.random(),
-        date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString(),
         desc,
         book,
         odds,
