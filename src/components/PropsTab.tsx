@@ -20,6 +20,15 @@ const MS: Record<string, string> = {
   pra: "Pts+Reb+Ast",
 };
 
+// best available price for one side across books
+function bestSide(books: PropBook[], side: "over" | "under") {
+  let best = { book: books[0].book, line: books[0].line, price: books[0][side] };
+  books.forEach((b) => {
+    if (decOdds(b[side]) > decOdds(best.price)) best = { book: b.book, line: b.line, price: b[side] };
+  });
+  return best;
+}
+
 export function PropsTab() {
   const { state, addBet, applyOdds } = useNBA();
   const { SLATE, PROPS, T, CTX, PLAYERS } = state;
@@ -216,18 +225,49 @@ export function PropsTab() {
                   )}
                 </div>
                 <span
+                  title="Strong: 8%+ edge, Lean: 3-8% edge, Pass: under 3%"
                   className={`tag ${a.conf === "Strong" ? "ok" : a.conf === "Lean" ? "warn" : ""}`}
                   style={a.conf === "Pass" ? { background: "#1e293b", color: "#94a3b8" } : {}}
                 >
                   {a.conf}
                 </span>
               </div>
-              <div className="text-sm" style={{ marginBottom: 4 }}>
-                {MS[p.market]}: <b>{p.line}</b> (proj {p.proj})
+              <div style={{ marginBottom: 4 }}>
+                <b>{MS[p.market]}: Over/Under {p.line}</b>
+                <span className="note">
+                  {" "}— {p.market === "pra" ? "points + rebounds + assists" : MS[p.market].toLowerCase()} in this game
+                </span>
+              </div>
+              <div className="text-sm" style={{ marginBottom: 6 }}>
+                {a.best.ev >= 0.03 ? (
+                  <>
+                    Best play: <b>{a.best.side === "over" ? "Over" : "Under"} {a.best.line}</b>{" "}
+                    at {a.best.book} ({fmtO(a.best.odds)}). We give it a{" "}
+                    <b>{Math.round(a.best.p * 100)}%</b> chance to hit, which beats the{" "}
+                    {Math.round((1 / decOdds(a.best.odds)) * 100)}% the odds imply by{" "}
+                    <b>{(a.best.ev * 100).toFixed(1)}%</b> of the stake.
+                  </>
+                ) : (
+                  <span style={{ color: "var(--mut)" }}>
+                    No clear edge: the odds already match how often this tends to hit.
+                  </span>
+                )}
+              </div>
+              <div className="text-xs" style={{ color: "var(--mut)", marginBottom: 2 }}>
+                Season average: <b>{p.proj}</b> {MK[p.market]} per game
+                {pl.min ? ` (${Math.round(pl.min)} min)` : ""}
+              </div>
+              <div className="text-xs" style={{ color: "var(--mut)", marginBottom: 2 }}>
+                Went over {p.line} in {a.l10.o} of the last {a.l10.o + a.l10.u} games
+                (last 15: {a.l15.o} of {a.l15.o + a.l15.u}; this season:{" "}
+                {a.y26.o} of {a.y26.o + a.y26.u})
               </div>
               <div className="text-xs" style={{ color: "var(--mut)", marginBottom: 6 }}>
-                L10: {a.l10.o}-{a.l10.u} | L15: {a.l15.o}-{a.l15.u} | 2026:{" "}
-                {a.y26.o}-{a.y26.u} | Def rank: {defChip(a.rank)}
+                Opponent defense vs {pl.pos || "this position"}: {defChip(a.rank)}{" "}
+                {a.rank >= 21 ? "(allows a lot, good for Over)" : a.rank <= 10 ? "(tough, good for Under)" : "(average)"}
+              </div>
+              <div className="text-xs" style={{ color: "var(--mut)", marginBottom: 2 }}>
+                Sportsbook prices (Over / Under):
               </div>
               <div className="grid g2" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                 {p.books.map((b: PropBook, bi: number) => (
@@ -256,8 +296,8 @@ export function PropsTab() {
                       )}
                     </span>
                     <span>
-                      {fmtO(b.over)}/{fmtO(b.under)}{" "}
-                      {b.line !== p.line ? `@${b.line}` : ""}
+                      O {fmtO(b.over)} / U {fmtO(b.under)}{" "}
+                      {b.line !== p.line ? `(line ${b.line})` : ""}
                     </span>
                   </div>
                 ))}
@@ -265,27 +305,19 @@ export function PropsTab() {
               <div className="flex gap-1 mt-1">
                 <button
                   className="b sm alt"
-                  onClick={() =>
-                    addBet(
-                      `${pl.name} O ${p.line} ${MK[p.market]}`,
-                      a.best.book,
-                      a.best.odds,
-                      1,
-                    )
-                  }
+                  onClick={() => {
+                    const o = bestSide(p.books, "over");
+                    addBet(`${pl.name} Over ${o.line} ${MS[p.market]}`, o.book, o.price, 1);
+                  }}
                 >
                   +Bet Over
                 </button>
                 <button
                   className="b sm alt"
-                  onClick={() =>
-                    addBet(
-                      `${pl.name} U ${p.line} ${MK[p.market]}`,
-                      a.best.book,
-                      a.best.odds,
-                      1,
-                    )
-                  }
+                  onClick={() => {
+                    const o = bestSide(p.books, "under");
+                    addBet(`${pl.name} Under ${o.line} ${MS[p.market]}`, o.book, o.price, 1);
+                  }}
                 >
                   +Bet Under
                 </button>
