@@ -57,6 +57,36 @@ function cell(x: any, k: string): string {
   }
 }
 
+// "8-4" -> win pct, so records sort by quality instead of as text
+const recPct = (s: any): number => {
+  const m = /^(\d+)-(\d+)$/.exec(String(s ?? ""));
+  if (!m) return -1;
+  const g = +m[1] + +m[2];
+  return g ? +m[1] / g : -1;
+};
+
+// numeric value each column sorts by (ties broken by games won / sample size)
+function sortVal(x: any, k: string): number | string {
+  switch (k) {
+    case "abbr":
+      return x.abbr || "";
+    case "w":
+      return x.w + x.l ? x.w / (x.w + x.l) + (x.w - x.l) * 1e-6 : -1;
+    case "b2bW":
+      return x.b2bW + x.b2bL ? x.b2bW / (x.b2bW + x.b2bL) : -1;
+    case "home":
+    case "road":
+    case "l10":
+      return recPct(x[k]);
+    case "streak": {
+      const m = /^([WL])(\d+)$/.exec(String(x.streak ?? ""));
+      return m ? (m[1] === "W" ? 1 : -1) * +m[2] : 0;
+    }
+    default:
+      return typeof x[k] === "number" ? x[k] : Number(x[k]) || 0;
+  }
+}
+
 export function TeamsTab() {
   const { state, selTeam, setSelTeam } = useNBA();
   // "current" = live view, "cur-only" = this season only, otherwise a past season key like "2024-25"
@@ -86,11 +116,13 @@ export function TeamsTab() {
           : t,
     )
     .sort((a: any, b: any) => {
-      const av = a[sortCol],
-        bv = b[sortCol];
-      return (typeof av === "string"
-        ? (av || "").localeCompare(bv || "")
-        : (av ?? 0) - (bv ?? 0)) * sortDir;
+      const av = sortVal(a, sortCol),
+        bv = sortVal(b, sortCol);
+      const d =
+        typeof av === "string"
+          ? av.localeCompare(bv as string)
+          : (av as number) - (bv as number);
+      return d * sortDir || a.abbr.localeCompare(b.abbr);
     });
 
   const t = selTeam ? state.T[selTeam] : null;
