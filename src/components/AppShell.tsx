@@ -62,33 +62,37 @@ export function AppShell() {
           </select>
         </label>
       </header>
-      <div style={{ display: activeTab === "slate" ? "block" : "none" }}>
-        <SlateTab />
-      </div>
-      <div style={{ display: activeTab === "props" ? "block" : "none" }}>
-        <PropsTab />
-      </div>
-      <div style={{ display: activeTab === "parlay" ? "block" : "none" }}>
-        <ParlayTab />
-      </div>
-      <div style={{ display: activeTab === "players" ? "block" : "none" }}>
-        <PlayersTab />
-      </div>
-      <div style={{ display: activeTab === "teams" ? "block" : "none" }}>
-        <TeamsTab />
-      </div>
-      <div style={{ display: activeTab === "systems" ? "block" : "none" }}>
-        <SystemsTab />
-      </div>
-      <div style={{ display: activeTab === "tracker" ? "block" : "none" }}>
-        <TrackerTab />
-      </div>
-      <div style={{ display: activeTab === "data" ? "block" : "none" }}>
-        <DataTab />
-      </div>
+      {propDetail == null && (
+        <>
+          <div style={{ display: activeTab === "slate" ? "block" : "none" }}>
+            <SlateTab />
+          </div>
+          <div style={{ display: activeTab === "props" ? "block" : "none" }}>
+            <PropsTab />
+          </div>
+          <div style={{ display: activeTab === "parlay" ? "block" : "none" }}>
+            <ParlayTab />
+          </div>
+          <div style={{ display: activeTab === "players" ? "block" : "none" }}>
+            <PlayersTab />
+          </div>
+          <div style={{ display: activeTab === "teams" ? "block" : "none" }}>
+            <TeamsTab />
+          </div>
+          <div style={{ display: activeTab === "systems" ? "block" : "none" }}>
+            <SystemsTab />
+          </div>
+          <div style={{ display: activeTab === "tracker" ? "block" : "none" }}>
+            <TrackerTab />
+          </div>
+          <div style={{ display: activeTab === "data" ? "block" : "none" }}>
+            <DataTab />
+          </div>
+        </>
+      )}
 
       {propDetail != null && (
-        <div style={{ display: activeTab !== "data" ? "block" : "none", paddingTop: 8 }}>
+        <div style={{ paddingTop: 8 }}>
           <PropDetailView />
         </div>
       )}
