@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import type { Player, Bet, Injury } from "@/types";
+import type { Player, Bet, Injury, ParlayLeg } from "@/types";
 import { createState, fetchNBAData, processData, clearCache } from "@/lib/nba";
 import type { AppState, OddsPayload } from "@/lib/nba";
 import { store, save } from "@/lib/store";
@@ -12,6 +12,11 @@ interface NBAContextType {
   error: string | null;
   refresh: () => Promise<void>;
   applyOdds: (odds: OddsPayload) => Promise<void>;
+  parlay: ParlayLeg[];
+  addLeg: (leg: ParlayLeg) => void;
+  setLegs: (legs: ParlayLeg[]) => void;
+  updateLegOdds: (id: string, odds: number) => void;
+  removeLeg: (id: string) => void;
   bets: Bet[];
   addBet: (desc: string, book: string, odds: number, units: number) => void;
   updateBetResult: (id: number | string, result: "pending" | "win" | "loss" | "push") => void;
@@ -41,6 +46,35 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
+  const [parlay, setParlay] = useState<ParlayLeg[]>([]);
+  const setLegs = useCallback((legs: ParlayLeg[]) => {
+    setParlay(legs);
+    save("parlay", legs);
+  }, []);
+  const addLeg = useCallback(
+    (leg: ParlayLeg) => {
+      setParlay((cur) => {
+        const next = cur.some((l) => l.id === leg.id) ? cur : [...cur, leg];
+        save("parlay", next);
+        return next;
+      });
+    },
+    [],
+  );
+  const updateLegOdds = useCallback((id: string, odds: number) => {
+    setParlay((cur) => {
+      const next = cur.map((l) => (l.id === id ? { ...l, odds } : l));
+      save("parlay", next);
+      return next;
+    });
+  }, []);
+  const removeLeg = useCallback((id: string) => {
+    setParlay((cur) => {
+      const next = cur.filter((l) => l.id !== id);
+      save("parlay", next);
+      return next;
+    });
+  }, []);
   const [bankroll, setBankroll] = useState(1000);
   const [unitPct, setUnitPct] = useState(1);
   const [activeTab, setActiveTab] = useState("slate");
@@ -83,6 +117,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refresh();
     setBets(store<Bet[]>("bets", []));
+    setParlay(store<ParlayLeg[]>("parlay", []));
     setBankroll(store<number>("bank", 1000));
     setUnitPct(store<number>("unitpct", 1));
   }, [refresh]);
@@ -133,6 +168,11 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         error,
         refresh,
         applyOdds,
+        parlay,
+        addLeg,
+        setLegs,
+        updateLegOdds,
+        removeLeg,
         bets,
         addBet,
         updateBetResult,

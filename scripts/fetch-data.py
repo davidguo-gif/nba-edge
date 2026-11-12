@@ -167,8 +167,7 @@ def main():
 
     rows, names = game_rows(season)
     prev_rows, prev_names = ([], {})
-    if int(CUTOFF[:4]) <= start_year:  # last season has games on/after the cutoff
-        prev_rows, prev_names = game_rows(prev, CUTOFF)
+    prev_rows, prev_names = game_rows(prev)  # full previous season (prop hit rates, defense vs position)
     names = {**prev_names, **names}
     if not rows and not prev_rows:
         sys.exit("No box scores returned (season may not have started yet).")

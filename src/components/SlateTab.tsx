@@ -1,7 +1,11 @@
 "use client";
 
 import { useNBA } from "@/lib/NBAContext";
-import { totalLean, scheduleSpots, restTxt } from "@/lib/nba";
+import { totalLean, scheduleSpots, restTxt, teamRank, ord } from "@/lib/nba";
+import type { TeamData } from "@/types";
+
+const tier = (r: number) => (r <= 10 ? "Strong" : r >= 21 ? "Weak" : "Average");
+const tierCls = (r: number) => (r <= 10 ? "ok" : r >= 21 ? "bad" : "");
 
 const paceWord = (p: number) => (p >= 100 ? "fast" : p <= 98.5 ? "slow" : "average");
 
@@ -51,6 +55,19 @@ export function SlateTab() {
                     {" "}(both teams combined)
                   </span>
                 </div>
+                {[g.home, g.away].map((ab) => {
+                  const t: TeamData | undefined = T[ab];
+                  if (!t) return null;
+                  const o = teamRank(T, ab, "ortg"),
+                    d = teamRank(T, ab, "drtg");
+                  return (
+                    <div key={ab} className="text-xs" style={{ color: "var(--mut)", marginBottom: 2 }}>
+                      <b>{ab}</b>: <b className={tierCls(o)}>{tier(o)} offense</b> ({ord(o)} best of 30, scores{" "}
+                      {t.ortg.toFixed(1)} per 100 possessions) and <b className={tierCls(d)}>{tier(d)} defense</b>{" "}
+                      ({ord(d)} best of 30, allows {t.drtg.toFixed(1)})
+                    </div>
+                  );
+                })}
                 <div className="text-xs" style={{ color: "var(--mut)", marginBottom: 2 }}>
                   Pace: {g.pace.toFixed(1)} possessions per 48 min ({paceWord(g.pace)})
                 </div>

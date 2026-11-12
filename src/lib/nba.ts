@@ -23,6 +23,8 @@ export interface AppState {
   POS: string[];
   MARKETS: string[];
   injuries: Record<string, Injury[]>;
+  seasonStart: string;
+  season: string;
   synced: SyncedInfo | null;
   standings: { ts: number } | null;
   live: { ts: number; remaining: number } | null;
@@ -79,6 +81,8 @@ export function createState(): AppState {
     POS: POSITIONS,
     MARKETS: ALL_MARKETS,
     injuries: {},
+    seasonStart: "2026-08-01",
+    season: "2026-27",
     synced: null,
     standings: null,
     live: null,
@@ -228,6 +232,13 @@ function TS_HR(
   return `${w}-${g.length - w}`;
 }
 
+// first day of the season's calendar year window: "2026-27" -> "2026-08-01"
+export const seasonStartOf = (season: string) => `${season.slice(0, 4)}-08-01`;
+export const prevSeasonLabel = (season: string) => {
+  const y = Number(season.slice(0, 4)) - 1;
+  return `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
+};
+
 const normName = (s: string) =>
   (s || "")
     .normalize("NFD")
@@ -245,6 +256,9 @@ export interface OddsPayload {
 export function processData(S: NBAData, state: AppState, odds?: OddsPayload | null): void {
   const rows = baseRows(S);
   const today = todayET();
+  const seasonStart = seasonStartOf(S.season);
+  state.seasonStart = seasonStart;
+  state.season = S.season;
   const teamKeys = Object.keys(state.T);
 
   // compute all-team stats + y26
@@ -366,6 +380,7 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
     if (!m || !rs.length) return;
     const avgMin = rs.reduce((s: number, r: any) => s + r[7], 0) / rs.length;
     if (rs.length < 3 || avgMin < 15) return;
+    if (!rs.some((r: any) => r[2] >= seasonStart)) return; // not active this season
     const mine = new Set(rs.map((r: any) => r[2]));
     const team = rs[0][3];
     if (!state.T[team]) return;
@@ -388,8 +403,11 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
           pra: r[8] + r[9] + r[10],
         };
       });
+    // averages are for the current season; fall back to everything if none yet
+    const curLog = log.filter((g) => g.date >= seasonStart);
+    const avLog = curLog.length ? curLog : log;
     const av = (k: string) =>
-      log.reduce((s, g) => s + (g as any)[k], 0) / log.length;
+      avLog.reduce((s, g) => s + (g as any)[k], 0) / avLog.length;
     list.push({
       id: 0,
       name: m[0],
@@ -535,11 +553,56 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
 }
 
 /* ---------- analysis ---------- */
-export const windows = (pl: Player) => ({
-  l10: pl.log.slice(0, 10),
-  l15: pl.log.slice(0, 15),
-  y26: pl.log.filter((g) => g.date >= "2026-01-01"),
-});
+// game windows for a player: last 10 / 15 games, this season, and last season
+export const windows = (pl: Player, seasonStart: string) => {
+  const prevStart = `${Number(seasonStart.slice(0, 4)) - 1}-08-01`;
+  return {
+    l10: pl.log.slice(0, 10),
+    l15: pl.log.slice(0, 15),
+    cur: pl.log.filter((g) => g.date >= seasonStart),
+    prev: pl.log.filter((g) => g.date >= prevStart && g.date < seasonStart),
+  };
+};
+
+// over/under/push counts for a line
+export function record(games: any[], k: string, line: number) {
+  let o = 0, u = 0, push = 0;
+  games.forEach((g) => {
+    if (g[k] > line) o++;
+    else if (g[k] < line) u++;
+    else push++;
+  });
+  return { o, u, push, n: games.length, pct: o + u ? o / (o + u) : null as number | null };
+}
+
+const POS_WORD: Record<string, string> = { G: "guards", W: "wings", C: "centers" };
+export const posWord = (p: string) => POS_WORD[p] || "players at this position";
+const MKT_WORD: Record<string, string> = {
+  pts: "points",
+  reb: "rebounds",
+  ast: "assists",
+  fg3: "3-pointers",
+  pra: "points + rebounds + assists",
+};
+export const mktWord = (m: string) => MKT_WORD[m] || m;
+
+/** rank 1 = toughest defense vs that position, 30 = softest */
+export function defExplain(rank: number, pos: string, market: string) {
+  const strength = rank >= 21 ? "Weak" : rank <= 10 ? "Strong" : "Average";
+  const effect =
+    rank >= 21
+      ? `allows more ${mktWord(market)} to ${posWord(pos)} than most teams, which helps the Over`
+      : rank <= 10
+        ? `holds ${posWord(pos)} to fewer ${mktWord(market)} than most teams, which helps the Under`
+        : `allows about the league-average ${mktWord(market)} to ${posWord(pos)}`;
+  return { strength, rank, effect, tone: rank >= 21 ? "ok" : rank <= 10 ? "bad" : "" };
+}
+
+/** where a team ranks league-wide for a rating (1 = best) */
+export function teamRank(T: Record<string, TeamData>, ab: string, key: "ortg" | "drtg") {
+  const list = Object.values(T).sort((a, b) => (key === "ortg" ? b.ortg - a.ortg : a.drtg - b.drtg));
+  return list.findIndex((t) => t.abbr === ab) + 1;
+}
 
 export function hit(
   games: any[],
@@ -633,29 +696,34 @@ export function totalLean(g: SlateGame): [string, string, string] {
   const fast = g.pace >= 100,
     slow = g.pace <= 98.5;
   if ((g.hRest === 0 && g.aRest === 0) || g.hFour || g.aFour)
-    return ["UNDER", "bad", "Fatigue compounds: lower pace + shooting"];
+    return [
+      "UNDER",
+      "bad",
+      "Tired legs (back-to-back or 4 games in 5 nights) slow the pace and hurt shooting, so scoring tends to be lower",
+    ];
   if (g.hRest === 0 || g.aRest === 0) {
-    if (slow) return ["UNDER", "bad", "One team on B2B and slow pace"];
+    if (slow)
+      return ["UNDER", "bad", "One team is on a back-to-back and the matchup is slow-paced, so scoring should be low"];
     if (fast)
       return [
         "No strong lean",
         "blue",
-        "B2B vs fast pace: mixed",
+        "One team is tired but the matchup is fast-paced; the two effects roughly cancel out",
       ];
     return [
       "Slight UNDER",
       "warn",
-      "One team on B2B: neutral to slight under",
+      "One team is on a back-to-back, which usually trims scoring a little",
     ];
   }
-  if (fast) return ["OVER", "ok", "Rested teams + fast pace"];
+  if (fast) return ["OVER", "ok", "Both teams are rested and play fast, so there are more possessions and more points"];
   if (g.hRest >= 3 && g.aRest >= 3)
-    return ["Slight OVER", "ok", "Both 3+ days rest"];
+    return ["Slight OVER", "ok", "Both teams have had 3+ days off; fresh legs help scoring a little"];
   if (slow)
-    return ["Slight UNDER", "warn", "Slow, defensive matchup"];
+    return ["Slight UNDER", "warn", "Both teams play slow, defensive basketball, which holds scoring down a bit"];
   return [
     "No strong lean",
     "blue",
-    "Mixed factors: pass or look at props",
+    "Nothing pushes the total clearly up or down. Pass, or look at player props instead",
   ];
 }

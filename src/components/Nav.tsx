@@ -5,6 +5,7 @@ import { useNBA } from "@/lib/NBAContext";
 const TABS = [
   { id: "slate", label: "Slate" },
   { id: "props", label: "Props" },
+  { id: "parlay", label: "Parlay Builder" },
   { id: "players", label: "Players" },
   { id: "teams", label: "Teams" },
   { id: "systems", label: "Systems & Tools" },

@@ -4,6 +4,7 @@ import { useNBA } from "@/lib/NBAContext";
 import { Nav } from "./Nav";
 import { SlateTab } from "./SlateTab";
 import { PropsTab } from "./PropsTab";
+import { ParlayTab } from "./ParlayTab";
 import { PlayersTab } from "./PlayersTab";
 import { TeamsTab } from "./TeamsTab";
 import { SystemsTab } from "./SystemsTab";
@@ -55,6 +56,9 @@ export function AppShell() {
       </div>
       <div style={{ display: activeTab === "props" ? "block" : "none" }}>
         <PropsTab />
+      </div>
+      <div style={{ display: activeTab === "parlay" ? "block" : "none" }}>
+        <ParlayTab />
       </div>
       <div style={{ display: activeTab === "players" ? "block" : "none" }}>
         <PlayersTab />

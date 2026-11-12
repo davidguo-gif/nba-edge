@@ -124,6 +124,23 @@ export interface SyncedInfo {
   rows: number;
 }
 
+/** One leg of a parlay. Game legs (spread / totals) and player-prop legs share this shape. */
+export interface ParlayLeg {
+  id: string;
+  gameId: number | null; // index into SLATE
+  game: string; // "SAS @ OKC"
+  kind: "spread" | "total" | "teamtotal" | "prop";
+  side: "over" | "under" | "cover"; // cover = team wins the spread
+  team?: string; // spread: team backed; team total / prop: that team
+  player?: string;
+  pos?: string;
+  market?: string;
+  line?: number | null;
+  label: string;
+  odds: number; // American
+  book?: string;
+}
+
 export interface Bet {
   id: number | string;
   date: string;
