@@ -228,7 +228,21 @@ function TS_HR(
   return `${w}-${g.length - w}`;
 }
 
-export function processData(S: NBAData, state: AppState): void {
+const normName = (s: string) =>
+  (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z ]/g, "")
+    .trim();
+
+export interface OddsPayload {
+  ts: number;
+  games: { home: string; away: string; dt?: string }[];
+  props: { name: string; team?: string[]; market: string; line: number; books: any[] }[];
+}
+
+export function processData(S: NBAData, state: AppState, odds?: OddsPayload | null): void {
   const rows = baseRows(S);
   const today = todayET();
   const teamKeys = Object.keys(state.T);
@@ -399,9 +413,13 @@ export function processData(S: NBAData, state: AppState): void {
   // tonight's schedule
   state.SLATE.length = 0;
   Object.keys(state.CTX).forEach((k) => delete state.CTX[k]);
-  const sl = S.slate && S.slate.date === today
-    ? S.slate.games.filter((g) => state.T[g.home] && state.T[g.away])
-    : [];
+  let sl: { home: string; away: string; dt?: string; status?: string }[] =
+    S.slate && S.slate.date === today
+      ? S.slate.games.filter((g) => state.T[g.home] && state.T[g.away])
+      : [];
+  // data file's schedule is stale (or empty): use the games the odds feed returned
+  if (!sl.length && odds?.games?.length)
+    sl = odds.games.filter((g) => state.T[g.home] && state.T[g.away]);
 
   const restOf = (ab: string) => {
     const ds = (teamDates[ab] || []).filter((d) => d < today);
@@ -476,6 +494,31 @@ export function processData(S: NBAData, state: AppState): void {
   });
 
   state.PROPS.length = 0;
+  if (odds?.props?.length) {
+    const byName = new Map<string, Player[]>();
+    state.PLAYERS.forEach((p) => {
+      const k = normName(p.name);
+      byName.set(k, [...(byName.get(k) || []), p]);
+    });
+    odds.props.forEach((op) => {
+      const cands = byName.get(normName(op.name));
+      if (!cands) return;
+      // prefer the player whose team is in the game this prop belongs to
+      const pl = cands.find((p) => op.team?.includes(p.team)) || cands[0];
+      if (!pl) return;
+      const proj =
+        op.market === "pra" ? pl.pts + pl.reb + pl.ast : (pl as any)[op.market];
+      state.PROPS.push({
+        id: state.PROPS.length,
+        pid: pl.id,
+        pname: pl.name,
+        market: op.market,
+        line: op.line,
+        proj: Math.round((proj ?? 0) * 10) / 10,
+        books: op.books,
+      });
+    });
+  }
   const last = rows.reduce(
     (m: string, r: any) => (r[2] > m ? r[2] : m),
     "",

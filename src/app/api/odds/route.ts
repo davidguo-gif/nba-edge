@@ -107,6 +107,7 @@ export async function GET(req: NextRequest) {
           hour: "numeric",
           minute: "2-digit",
         }),
+        dt: ev.commence_time,
         live: true,
       });
 
@@ -116,6 +117,7 @@ export async function GET(req: NextRequest) {
 
       const data = await oddsRes.json();
       const acc: Record<string, any> = {};
+      const names: Record<string, string> = {};
 
       data.bookmakers.forEach((bk: any) => {
         bk.markets.forEach((m: any) => {
@@ -132,6 +134,7 @@ export async function GET(req: NextRequest) {
           m.outcomes.forEach((o: any) => {
             const k = norm(o.description) + "|" + mk;
             if (!acc[k]) acc[k] = {};
+            names[k] = o.description;
             if (!acc[k][bk.title]) {
               acc[k][bk.title] = { book: bk.title, line: o.point };
             }
@@ -149,6 +152,8 @@ export async function GET(req: NextRequest) {
         if (!books.length) return;
         const lines = books.map((b: any) => b.line).sort((a: number, b: number) => a - b);
         allProps.push({
+          name: names[key],
+          team: [home, away],
           market: key.split("|")[1],
           line: lines[Math.floor((lines.length - 1) / 2)],
           books,

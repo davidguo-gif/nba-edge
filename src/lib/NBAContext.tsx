@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { Player, Bet, Injury } from "@/types";
 import { createState, fetchNBAData, processData, clearCache } from "@/lib/nba";
-import type { AppState } from "@/lib/nba";
+import type { AppState, OddsPayload } from "@/lib/nba";
 import { store, save } from "@/lib/store";
 
 interface NBAContextType {
@@ -11,6 +11,7 @@ interface NBAContextType {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  applyOdds: (odds: OddsPayload) => Promise<void>;
   bets: Bet[];
   addBet: (desc: string, book: string, odds: number, units: number) => void;
   updateBetResult: (id: number | string, result: "pending" | "win" | "loss" | "push") => void;
@@ -46,6 +47,23 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [selTeam, setSelTeam] = useState<string | null>(null);
   const [selPlayer, setSelPlayer] = useState<number | null>(null);
 
+  const loadOdds = (): OddsPayload | null => {
+    try {
+      const o = JSON.parse(localStorage.getItem("nbaedge.odds") || "null");
+      return o && Date.now() - o.ts < 24 * 3600e3 ? o : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const applyOdds = useCallback(async (odds: OddsPayload) => {
+    localStorage.setItem("nbaedge.odds", JSON.stringify(odds));
+    const data = await fetchNBAData();
+    const s = createState();
+    processData(data, s, odds);
+    setState(s);
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -53,7 +71,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
       clearCache();
       const data = await fetchNBAData();
       const s = createState();
-      processData(data, s);
+      processData(data, s, loadOdds());
       setState(s);
     } catch (e: any) {
       setError(e.message || "Failed to load data");
@@ -114,6 +132,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         loading,
         error,
         refresh,
+        applyOdds,
         bets,
         addBet,
         updateBetResult,

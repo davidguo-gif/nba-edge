@@ -21,7 +21,7 @@ const MS: Record<string, string> = {
 };
 
 export function PropsTab() {
-  const { state, addBet } = useNBA();
+  const { state, addBet, applyOdds } = useNBA();
   const { SLATE, PROPS, T, CTX, PLAYERS } = state;
   const [apiKey, setApiKey] = useState("");
   const [loadingOdds, setLoadingOdds] = useState(false);
@@ -98,9 +98,11 @@ export function PropsTab() {
         throw new Error(err.error || "Failed to fetch odds");
       }
       localStorage.setItem("nbaedge.apikey", apiKey);
-      setOddsStatus("Odds loaded! Reloading...");
-      // Reload the page to re-process with new props
-      window.location.reload();
+      const odds = await res.json();
+      await applyOdds(odds);
+      setOddsStatus(
+        `Loaded ${odds.props.length} lines across ${odds.games.length} games`,
+      );
     } catch (e: any) {
       setOddsStatus("Error: " + e.message);
     } finally {
@@ -141,6 +143,7 @@ export function PropsTab() {
             className="b alt sm"
             onClick={() => {
               localStorage.removeItem("nbaedge.apikey");
+              localStorage.removeItem("nbaedge.odds");
               window.location.reload();
             }}
           >
