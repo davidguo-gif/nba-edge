@@ -1,0 +1,8 @@
+node_modules/
+.next/
+out/
+public/nbadata.json
+*.log
+.env
+.env.local
+.env.*.local
