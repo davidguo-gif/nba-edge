@@ -214,6 +214,7 @@ function teamStats(
     };
     stats[ab].net = stats[ab].ortg - stats[ab].drtg;
   });
+  Object.defineProperty(stats, "__games", { value: TS, enumerable: false });
   return stats;
 }
 
@@ -260,8 +261,8 @@ export function processData(S: NBAData, state: AppState): void {
       return;
     }
     Object.assign(t, s);
-    t.home = TS_HR(ab, TSall, true);
-    t.road = TS_HR(ab, TSall, false);
+    t.home = TS_HR(ab, (TSall as any).__games, true);
+    t.road = TS_HR(ab, (TSall as any).__games, false);
     t.y26 = TSy26[ab];
   });
 
