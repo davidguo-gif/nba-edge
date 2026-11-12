@@ -58,7 +58,9 @@ th.sorted { color: var(--text); }
 .tag.warn { background: #713f12; color: #fcd34d; }
 
 /* Cards */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.card .grid { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.card table { table-layout: auto; max-width: 100%; }
 .card.stat { text-align: center; }
 .card.stat b { font-size: 1.5rem; display: block; }
 
@@ -88,6 +90,7 @@ th.sorted { color: var(--text); }
 
 /* Grid */
 .grid { display: grid; gap: 8px; }
+.grid > * { min-width: 0; }
 .g2 { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 .g3 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .g4 { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }

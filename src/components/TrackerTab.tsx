@@ -5,6 +5,7 @@ import { useNBA } from "@/lib/NBAContext";
 import { decOdds } from "@/lib/nba";
 import { fmtOdds } from "@/lib/odds";
 import { OddsInput } from "./OddsInput";
+import { NumInput } from "./NumInput";
 import { BOOK_URLS } from "@/types";
 
 export function TrackerTab() {
@@ -78,20 +79,11 @@ export function TrackerTab() {
         <div className="form">
           <label>
             Bankroll ($)
-            <input
-              type="number"
-              value={bankroll}
-              onChange={(e) => setBankroll(+e.target.value || 1000)}
-            />
+            <NumInput value={bankroll} min={1} onChange={setBankroll} />
           </label>
           <label>
             Unit size (%)
-            <input
-              type="number"
-              step="0.25"
-              value={unitPct}
-              onChange={(e) => setUnitPct(+e.target.value || 1)}
-            />
+            <NumInput value={unitPct} min={0.01} step="0.25" onChange={setUnitPct} />
           </label>
           <div className="note">1 unit = ${unit.toFixed(2)}</div>
         </div>
@@ -121,12 +113,7 @@ export function TrackerTab() {
           </label>
           <label>
             Units
-            <input
-              type="number"
-              step="0.5"
-              value={units}
-              onChange={(e) => setUnits(+e.target.value || 1)}
-            />
+            <NumInput value={units} min={0.01} step="0.5" onChange={setUnits} />
           </label>
           <button
             className="b"

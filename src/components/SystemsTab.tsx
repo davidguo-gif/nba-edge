@@ -6,6 +6,7 @@ import { store, save } from "@/lib/store";
 import { fmtO, decOdds } from "@/lib/nba";
 import { fmtOdds, parseOdds } from "@/lib/odds";
 import { OddsInput } from "./OddsInput";
+import { NumInput } from "./NumInput";
 
 const CHECK = [
   "Checked both teams' rest days and B2B status",
@@ -216,7 +217,7 @@ export function SystemsTab() {
           <h3 style={{ marginTop: 0 }}>Kelly criterion</h3>
           <div className="form">
             <label>
-              Win %<input type="number" value={kellyP} onChange={(e) => setKellyP(+e.target.value)} />
+              Win %<NumInput value={kellyP} min={0} onChange={setKellyP} />
             </label>
             <label>
               Odds ({oddsFormat})<OddsInput american={kellyO} onChange={setKellyO} />
@@ -230,7 +231,7 @@ export function SystemsTab() {
               </select>
             </label>
             <label>
-              Bankroll<input type="number" value={kellyB} onChange={(e) => { setKellyB(+e.target.value); save("bank", +e.target.value); }} />
+              Bankroll<NumInput value={kellyB} min={1} onChange={(n) => { setKellyB(n); save("bank", n); }} />
             </label>
           </div>
           <div className="note" style={{ marginTop: 10 }}>{kelOut}</div>
@@ -242,7 +243,7 @@ export function SystemsTab() {
               Leg odds ({oddsFormat}, comma-separated)<input value={plOdds} onChange={(e) => setPlOdds(e.target.value)} />
             </label>
             <label>
-              Stake<input type="number" value={plStake} onChange={(e) => setPlStake(+e.target.value)} />
+              Stake<NumInput value={plStake} min={0} onChange={setPlStake} />
             </label>
           </div>
           <div className="note" style={{ marginTop: 10 }}>{plOut || "Enter 2+ legs."}</div>

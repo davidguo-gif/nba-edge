@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { fmtOdds } from "@/lib/odds";
 import { OddsInput } from "./OddsInput";
+import { NumInput } from "./NumInput";
 import {
   MAX_LEGS,
   MIN_LEGS,
@@ -203,7 +204,7 @@ export function ParlayTab() {
         <div className="form" style={{ marginTop: 10 }}>
           <label>
             Stake (units; 1 unit = {unitPct}% of bankroll)
-            <input type="number" min={0} step={0.5} value={units} onChange={(e) => setUnits(+e.target.value)} />
+            <NumInput value={units} min={0} step={0.5} onChange={setUnits} />
           </label>
           <button className="b alt sm" onClick={() => setLegs([])} disabled={!parlay.length}>
             Clear all
