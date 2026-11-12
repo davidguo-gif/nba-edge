@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { totalLean, scheduleSpots, restTxt, teamRank, ord } from "@/lib/nba";
 import type { TeamData } from "@/types";
@@ -9,8 +10,22 @@ const tierCls = (r: number) => (r <= 10 ? "ok" : r >= 21 ? "bad" : "");
 const paceWord = (p: number) => (p >= 100 ? "fast" : p <= 98.5 ? "slow" : "avg");
 
 export function SlateTab() {
-  const { state } = useNBA();
+  const { state, focus, clearFocus } = useNBA();
   const { SLATE, T } = state;
+  const [hl, setHl] = useState<number | null>(null);
+
+  // arriving from a parlay leg: scroll to and highlight that game
+  useEffect(() => {
+    if (!focus || focus.tab !== "slate" || focus.gameId == null) return;
+    const id = focus.gameId;
+    clearFocus();
+    setHl(id);
+    setTimeout(() => {
+      document.getElementById(`slate-game-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    setTimeout(() => setHl(null), 3000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
 
   return (
     <div>
@@ -29,7 +44,12 @@ export function SlateTab() {
             const leanBg =
               tl[1] === "ok" ? "#166534" : tl[1] === "bad" ? "#7f1d1d" : tl[1] === "warn" ? "#713f12" : "#1e293b";
             return (
-              <div key={g.id} className="card">
+              <div
+                key={g.id}
+                id={`slate-game-${g.id}`}
+                className="card"
+                style={hl === g.id ? { outline: "2px solid var(--blue)" } : undefined}
+              >
                 <div className="flex items-center justify-between mb-1">
                   <div>
                     <b>{g.away}</b> @ <b>{g.home}</b>

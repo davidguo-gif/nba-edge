@@ -13,6 +13,9 @@ interface NBAContextType {
   error: string | null;
   refresh: () => Promise<void>;
   applyOdds: (odds: OddsPayload) => Promise<void>;
+  focus: { tab: string; player?: string; market?: string; gameId?: number | null } | null;
+  goToLeg: (leg: ParlayLeg) => void;
+  clearFocus: () => void;
   oddsFormat: OddsFormat;
   setOddsFormat: (f: OddsFormat) => void;
   parlay: ParlayLeg[];
@@ -50,6 +53,16 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [parlay, setParlay] = useState<ParlayLeg[]>([]);
+  const [focus, setFocus] = useState<NBAContextType["focus"]>(null);
+  const clearFocus = useCallback(() => setFocus(null), []);
+  // jump from a parlay leg to the prop (Props tab) or game (Slate tab) it came from
+  const goToLeg = useCallback((leg: ParlayLeg) => {
+    const isProp = leg.kind === "prop";
+    setActiveTabState(isProp ? "props" : "slate");
+    setSelTeam(null);
+    setSelPlayer(null);
+    setFocus({ tab: isProp ? "props" : "slate", player: leg.player, market: leg.market, gameId: leg.gameId });
+  }, []);
   const [oddsFormat, setOddsFormatState] = useState<OddsFormat>("decimal");
   const setOddsFormat = useCallback((f: OddsFormat) => {
     setOddsFormatState(f);
@@ -85,7 +98,8 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const [bankroll, setBankroll] = useState(1000);
   const [unitPct, setUnitPct] = useState(1);
-  const [activeTab, setActiveTab] = useState("slate");
+  const [activeTab, setActiveTabState] = useState("slate");
+  const setActiveTab = setActiveTabState;
   const [selTeam, setSelTeam] = useState<string | null>(null);
   const [selPlayer, setSelPlayer] = useState<number | null>(null);
 
@@ -177,6 +191,9 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         error,
         refresh,
         applyOdds,
+        focus,
+        goToLeg,
+        clearFocus,
         oddsFormat,
         setOddsFormat,
         parlay,

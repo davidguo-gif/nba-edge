@@ -15,7 +15,7 @@ const MK: Record<string, string> = {
 };
 
 export function PropsTab() {
-  const { state, applyOdds } = useNBA();
+  const { state, applyOdds, focus, clearFocus } = useNBA();
   const { SLATE, PROPS, T, CTX, PLAYERS } = state;
   const [apiKey, setApiKey] = useState("");
   const [loadingOdds, setLoadingOdds] = useState(false);
@@ -68,6 +68,29 @@ export function PropsTab() {
     (p as any)._analysis = { rank, defAdj, best, conf };
     return true;
   });
+
+  // arriving from a parlay leg: show that prop, expanded, scrolled into view
+  useEffect(() => {
+    if (!focus || focus.tab !== "props") return;
+    const p = PROPS.find(
+      (x) => PLAYERS[x.pid]?.name === focus.player && x.market === focus.market,
+    );
+    if (!p) {
+      flash("That prop isn't loaded right now (fetch live odds to see it).");
+      clearFocus();
+      return;
+    }
+    setGameFilter("all");
+    setMarketFilter("all");
+    setLeanFilter("all");
+    setSearchQ("");
+    setOpen(p.id);
+    clearFocus();
+    setTimeout(() => {
+      document.getElementById(`prop-card-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
 
   useEffect(() => {
     const stored = localStorage.getItem("nbaedge.apikey");
@@ -175,8 +198,8 @@ export function PropsTab() {
           const c = CTX[pl.team];
           const gm = c ? SLATE[c.gid] : null;
           return (
+            <div key={p.id} id={`prop-card-${p.id}`} style={{ scrollMarginTop: 8 }}>
             <PropCard
-              key={p.id}
               p={p}
               pl={pl}
               gm={gm}
@@ -185,6 +208,7 @@ export function PropsTab() {
               onToggle={() => setOpen(open === p.id ? null : p.id)}
               onAdded={flash}
             />
+            </div>
           );
         })}
       </div>

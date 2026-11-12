@@ -30,7 +30,7 @@ export function ParlayTab() {
   const { state, parlay, addLeg, setLegs, updateLegOdds, removeLeg, bankroll, unitPct, addBet, setActiveTab } =
     useNBA();
   const { SLATE, PROPS, PLAYERS } = state;
-  const { oddsFormat } = useNBA();
+  const { oddsFormat, goToLeg } = useNBA();
   const fo = (o: number) => fmtOdds(o, oddsFormat);
   const [units, setUnits] = useState(1);
   const [gameSel, setGameSel] = useState(0);
@@ -117,7 +117,10 @@ export function ParlayTab() {
               </div>
               {s.legs.map((l) => (
                 <div key={l.id} className="text-sm">
-                  {"\u2022"} {l.label}
+                  {"\u2022"}{" "}
+                  <a onClick={() => goToLeg(l)} style={{ cursor: "pointer", textDecoration: "underline" }}>
+                    {l.label}
+                  </a>
                 </div>
               ))}
               {s.extras.length > 0 && (
@@ -173,7 +176,13 @@ export function ParlayTab() {
               {parlay.map((l) => (
                 <tr key={l.id}>
                   <td>
-                    {l.label}
+                    <a
+                      onClick={() => goToLeg(l)}
+                      style={{ cursor: "pointer", textDecoration: "underline" }}
+                      title={l.kind === "prop" ? "Open this prop for full history" : "Open this game on the Slate"}
+                    >
+                      {l.label}
+                    </a>
                     {l.book ? <span className="note"> ({l.book})</span> : null}
                   </td>
                   <td>{l.game}</td>
