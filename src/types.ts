@@ -68,6 +68,7 @@ export interface SlateGame {
   aFour: boolean;
   time: string;
   model: boolean;
+  dt?: string; // ISO datetime for filtering
 }
 
 export interface ContextData {

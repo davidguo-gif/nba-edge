@@ -482,6 +482,7 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
       hFour: hr.four,
       aFour: ar.four,
       model: true,
+      dt: g.dt,
       time: g.dt
         ? new Date(g.dt).toLocaleTimeString([], {
             hour: "numeric",
@@ -589,6 +590,10 @@ const POS_WORD: Record<string, string> = { G: "guards", W: "wings", C: "centers"
 export const posWord = (p: string) => POS_WORD[p] || "players at this position";
 /** Full display name for a player's raw position string (e.g. "G" -> "Guard"). */
 export const posFull = (raw: string): string => POS_LABEL[raw] || (raw || "N/A");
+
+const POS_GROUP_LABEL: Record<string, string> = { G: "Guard", W: "Wing", C: "Center" };
+/** Display label for a player's grouped position (G/W/C). */
+export const posGroupLabel = (group: string): string => POS_GROUP_LABEL[group] || group || "";
 
 const MKT_WORD: Record<string, string> = {
   pts: "points", reb: "rebounds", ast: "assists", fg3: "3-pointers",

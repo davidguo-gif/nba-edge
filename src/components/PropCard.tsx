@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { BOOK_URLS, MARKET_NAMES, MARKET_LABELS, type PropBook, type Player, type SlateGame } from "@/types";
-import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, ord, decOdds } from "@/lib/nba";
+import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds } from "@/lib/nba";
 import { bestPrice, propLeg } from "@/lib/parlay";
 import { fmtOdds } from "@/lib/odds";
 
@@ -62,7 +62,7 @@ export function PropCardRow({
       <tr onClick={onToggle} style={{ cursor: "pointer" }}>
         <td>
           <b>{pl.name}</b>
-          <div className="text-xs note">{pl.team} · {posFull(pl.posRaw)}</div>
+          <div className="text-xs note">{pl.team} · {posFull(pl.posRaw)} · <span className="tag" style={{fontSize:9,padding:'0 4px',background:'#1e293b',color:'#94a3b8',verticalAlign:'middle'}}>{posGroupLabel(pl.pos)}</span></div>
         </td>
         <td>
           {gLabel}

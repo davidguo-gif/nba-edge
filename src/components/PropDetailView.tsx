@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { BOOK_URLS, type Player, type SlateGame, type PropBook, MARKET_NAMES, MARKET_LABELS } from "@/types";
-import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, ord, decOdds } from "@/lib/nba";
+import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds } from "@/lib/nba";
 import { bestPrice, propLeg } from "@/lib/parlay";
 import { fmtOdds } from "@/lib/odds";
 
@@ -138,7 +138,7 @@ export function PropDetailView() {
           <div>
             <h2 style={{ margin: 0 }}>{pl.name} · {p.line} {MARKET_NAMES[p.market]}</h2>
             <div className="text-sm note">
-              {pl.team} · {posFull(pl.posRaw)} · {gLabel} {gm ? `· ${gm.time}` : ""}
+              {pl.team} · {posFull(pl.posRaw)} · <span className="tag" style={{fontSize:9,padding:'0 4px',background:'#1e293b',color:'#94a3b8',verticalAlign:'middle'}}>{posGroupLabel(pl.pos)}</span> · {gLabel} {gm ? `· ${gm.time}` : ""}
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
