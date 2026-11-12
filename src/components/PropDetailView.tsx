@@ -104,13 +104,24 @@ export function PropDetailView() {
   const over = bestPrice(p.books, "over");
   const under = bestPrice(p.books, "under");
 
+  // Use the same analysis computed by PropsTab (L10/L15/szn weighted, defense-adjusted, best EV)
+  const analysis = (p as any)._analysis as { rank: number; defAdj: number; best: any; conf: string } | undefined;
+  const useEdge = analysis?.best?.ev ?? 0;
+  const useConf = analysis?.conf ?? "Pass";
+  const useRank = analysis?.rank ?? (opp ? T[opp]?.rank?.[pl.pos]?.[p.market] || 15 : 15);
+  const useBest = analysis?.best;
+  const edgeOk = useEdge >= 0.03;
+
+  // Compute the simpler edge too for display when analysis isn't available
   const seaHit = rc.n ? rc.o / rc.n : 0;
   const seaImp = over.price ? 1 / decOdds(over.price) : 0.5;
-  const edge = seaHit - seaImp;
+  const simpleEdge = seaHit - seaImp;
 
-  const d = defExplain(0, pl.pos, p.market);
-  // Recalculate actual rank
-  const actualRank = opp ? T[opp]?.rank?.[pl.pos]?.[p.market] || 15 : 15;
+  // Use the analysis edge if available, otherwise fall back to simple
+  const edge = analysis?.best ? useEdge : simpleEdge;
+
+  const d = defExplain(useRank, pl.pos, p.market);
+  const actualRank = useRank;
 
   const rows = [
     { label: "Last 10", r: record(w.l10, p.market, line), games: w.l10 as GameRow[], key: "l10" },
@@ -142,8 +153,8 @@ export function PropDetailView() {
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className={`tag ${edge > 0.03 ? "ok" : edge > 0 ? "warn" : "bad"}`}>
-              {edge > 0.03 ? "PLAY" : edge > 0 ? "Lean" : "Pass"}
+            <div className={`tag ${useConf === "Strong" ? "ok" : useConf === "Lean" ? "warn" : ""}`} style={useConf === "Pass" ? { background: "var(--card2)", color: "var(--mut)" } : undefined}>
+              {useConf}
             </div>
           </div>
         </div>
@@ -194,14 +205,27 @@ export function PropDetailView() {
         <h3 style={{ marginTop: 0 }}>Analysis</h3>
         <ul className="clean text-sm">
           <li className="row">
-            <b>Edge:</b> {edge > 0.03
-              ? `+${(edge * 100).toFixed(1)}% — above the 3% threshold, this is a playable edge`
-              : edge > 0
-                ? `+${(edge * 100).toFixed(1)}% — below the 3% threshold, small edge`
-                : "No edge found"}
+            <b>Edge:</b> {useBest ? (
+              <>{edge > 0.03
+                ? `+${(edge * 100).toFixed(1)}% — above the 3% threshold, this is a playable edge`
+                : edge > 0
+                  ? `+${(edge * 100).toFixed(1)}% — below the 3% threshold, small edge`
+                  : "No edge found"} (weighted L10/L15/szn + defense-adjusted EV)</>
+            ) : (
+              <>{edge > 0.03
+                ? `+${(edge * 100).toFixed(1)}% — above the 3% threshold`
+                : edge > 0
+                  ? `+${(edge * 100).toFixed(1)}% — below the 3% threshold`
+                  : "No edge found"}</>
+            )}
           </li>
+          {useBest && (
+            <li className="row">
+              <b>Pick:</b> <b>{useBest.side === "over" ? "OVER" : "UNDER"} {useBest.line}</b> @ {useBest.book} ({fo(useBest.odds)}) — {Math.round(useBest.p * 100)}% hit vs {(1 / decOdds(useBest.odds) * 100).toFixed(0)}% implied
+            </li>
+          )}
           <li className="row">
-            <b>Hit rate:</b> {rc.o}/{rc.n} ({pct(rc.pct)}) this season, implied {pct(seaImp)}
+            <b>Hit rate:</b> L10 <b>{r10.o}/{r10.n}</b> ({pct(r10.pct)}) · szn <b>{rc.o}/{rc.n}</b> ({pct(rc.pct)}) · implied {pct(seaImp)}
           </li>
           <li className="row">
             <b>Defense matchup:</b> {oppName || opp} ranks <b>{ord(actualRank)}</b> vs {posFull(pl.posRaw)} in {MARKET_NAMES[p.market]} —
