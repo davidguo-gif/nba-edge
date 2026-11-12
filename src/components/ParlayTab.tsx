@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
-import { fmtO } from "@/lib/nba";
+import { fmtOdds } from "@/lib/odds";
+import { OddsInput } from "./OddsInput";
 import {
   MAX_LEGS,
   MIN_LEGS,
@@ -29,6 +30,8 @@ export function ParlayTab() {
   const { state, parlay, addLeg, setLegs, updateLegOdds, removeLeg, bankroll, unitPct, addBet, setActiveTab } =
     useNBA();
   const { SLATE, PROPS, PLAYERS } = state;
+  const { oddsFormat } = useNBA();
+  const fo = (o: number) => fmtOdds(o, oddsFormat);
   const [units, setUnits] = useState(1);
   const [gameSel, setGameSel] = useState(0);
   const [msg, setMsg] = useState("");
@@ -69,7 +72,7 @@ export function ParlayTab() {
             <b>2-{MAX_LEGS} legs only.</b> More than that and the chance of winning collapses.
           </li>
           <li>
-            <b>No heavy favorites.</b> Skip any leg at {HEAVY_FAV} or worse; it adds little payout for real risk.
+            <b>No heavy favorites.</b> Skip any leg at {oddsFormat === "decimal" ? fmtOdds(HEAVY_FAV, "decimal") : HEAVY_FAV} or {oddsFormat === "decimal" ? "lower" : "worse"} (a heavy favorite); it adds little payout for real risk.
           </li>
           <li>
             <b>Use correlation.</b> Legs should depend on each other, in the same game. Example: when the Lakers are
@@ -125,7 +128,7 @@ export function ParlayTab() {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                     {s.extras.map((l) => (
                       <button key={l.id} className="b sm alt" onClick={() => addLeg(l)}>
-                        + {l.label} ({fmtO(l.odds)})
+                        + {l.label} ({fo(l.odds)})
                       </button>
                     ))}
                   </div>
@@ -162,7 +165,7 @@ export function ParlayTab() {
               <tr>
                 <th style={{ textAlign: "left" }}>Leg</th>
                 <th style={{ textAlign: "left" }}>Game</th>
-                <th>Odds (American)</th>
+                <th>Odds ({oddsFormat === "decimal" ? "decimal" : "American"})</th>
                 <th />
               </tr>
             </thead>
@@ -175,15 +178,7 @@ export function ParlayTab() {
                   </td>
                   <td>{l.game}</td>
                   <td style={{ textAlign: "center" }}>
-                    <input
-                      type="number"
-                      value={l.odds}
-                      style={{ width: 80 }}
-                      onChange={(e) => {
-                        const v = parseInt(e.target.value, 10);
-                        if (!isNaN(v)) updateLegOdds(l.id, v);
-                      }}
-                    />
+                    <OddsInput american={l.odds} onChange={(a) => updateLegOdds(l.id, a)} />
                   </td>
                   <td>
                     <button className="b sm alt" onClick={() => removeLeg(l.id)}>
@@ -208,7 +203,7 @@ export function ParlayTab() {
 
         {parlay.length >= 1 && (
           <div className="text-sm" style={{ marginTop: 8 }}>
-            Combined odds: <b>{fmtO(toAmerican(dec))}</b> ({dec.toFixed(2)}x). Stake ${stake$.toFixed(2)} (
+            Combined odds: <b>{oddsFormat === "decimal" ? dec.toFixed(2) : fmtOdds(toAmerican(dec), "american")}</b> ({oddsFormat === "decimal" ? fmtOdds(toAmerican(dec), "american") + " American" : dec.toFixed(2) + " decimal"}). Stake ${stake$.toFixed(2)} (
             {stakePct.toFixed(1)}% of ${bankroll}) pays <b>${(stake$ * (dec - 1)).toFixed(2)}</b> profit
             (${(stake$ * dec).toFixed(2)} back). The odds imply a {(100 / dec).toFixed(1)}% chance of winning.
           </div>
@@ -282,7 +277,7 @@ export function ParlayTab() {
               </button>
             </div>
             <div className="text-xs" style={{ color: "var(--mut)", marginTop: 6 }}>
-              Legs are added at -110. Change the odds in the table above to match your sportsbook&apos;s price and
+              Legs are added at {fo(-110)}. Change the odds in the table above to match your sportsbook&apos;s price and
               line. Player props are added from the Props tab.
             </div>
           </div>

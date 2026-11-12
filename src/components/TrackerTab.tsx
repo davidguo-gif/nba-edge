@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
-import { fmtO, decOdds } from "@/lib/nba";
+import { decOdds } from "@/lib/nba";
+import { fmtOdds } from "@/lib/odds";
+import { OddsInput } from "./OddsInput";
 import { BOOK_URLS } from "@/types";
 
 export function TrackerTab() {
@@ -15,6 +17,7 @@ export function TrackerTab() {
     setBankroll,
     unitPct,
     setUnitPct,
+    oddsFormat,
   } = useNBA();
   const [desc, setDesc] = useState("");
   const [book, setBook] = useState("DraftKings");
@@ -113,12 +116,8 @@ export function TrackerTab() {
             </select>
           </label>
           <label>
-            Odds
-            <input
-              type="number"
-              value={odds}
-              onChange={(e) => setOdds(+e.target.value)}
-            />
+            Odds ({oddsFormat})
+            <OddsInput american={odds} onChange={setOdds} />
           </label>
           <label>
             Units
@@ -177,7 +176,7 @@ export function TrackerTab() {
                     b.book
                   )}
                 </td>
-                <td className="num">{fmtO(b.odds)}</td>
+                <td className="num">{fmtOdds(b.odds, oddsFormat)}</td>
                 <td className="num">{b.units}</td>
                 <td>
                   <select

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { BOOK_URLS, type PropBook, type SlateGame } from "@/types";
 import {
-  fmtO,
   decOdds,
   clamp,
   windows,
@@ -17,6 +16,7 @@ import {
   ord,
 } from "@/lib/nba";
 import { bestPrice, propLeg } from "@/lib/parlay";
+import { fmtOdds } from "@/lib/odds";
 
 const MK: Record<string, string> = {
   pts: "PTS",
@@ -38,7 +38,8 @@ const shortDate = (d: string) =>
   new Date(d + "T12:00:00Z").toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" });
 
 export function PropsTab() {
-  const { state, addBet, applyOdds, addLeg, setActiveTab } = useNBA();
+  const { state, addBet, applyOdds, addLeg, setActiveTab, oddsFormat } = useNBA();
+  const fo = (o: number) => fmtOdds(o, oddsFormat);
   const { SLATE, PROPS, T, CTX, PLAYERS } = state;
   const [apiKey, setApiKey] = useState("");
   const [loadingOdds, setLoadingOdds] = useState(false);
@@ -254,7 +255,7 @@ export function PropsTab() {
                     <b>
                       {a.best.side === "over" ? "Over" : "Under"} {a.best.line}
                     </b>{" "}
-                    at {a.best.book} ({fmtO(a.best.odds)}). We give it a <b>{Math.round(a.best.p * 100)}%</b>{" "}
+                    at {a.best.book} ({fo(a.best.odds)}). We give it a <b>{Math.round(a.best.p * 100)}%</b>{" "}
                     chance to hit, which beats the {Math.round((1 / decOdds(a.best.odds)) * 100)}% the odds
                     imply by <b>{(a.best.ev * 100).toFixed(1)}%</b> of the stake.
                   </>
@@ -343,7 +344,7 @@ export function PropsTab() {
                         <b>OVER {over.line}</b>
                       </div>
                       <div className="text-xs" style={{ color: "var(--mut)" }}>
-                        Best price {fmtO(over.price)} at {over.book}
+                        Best price {fo(over.price)} at {over.book}
                       </div>
                       <div className="flex gap-1 mt-1">
                         <button
@@ -364,7 +365,7 @@ export function PropsTab() {
                         <b>UNDER {under.line}</b>
                       </div>
                       <div className="text-xs" style={{ color: "var(--mut)" }}>
-                        Best price {fmtO(under.price)} at {under.book}
+                        Best price {fo(under.price)} at {under.book}
                       </div>
                       <div className="flex gap-1 mt-1">
                         <button
@@ -408,7 +409,7 @@ export function PropsTab() {
                           )}
                         </span>
                         <span>
-                          line {b.line}: O {fmtO(b.over)} / U {fmtO(b.under)}
+                          line {b.line}: O {fo(b.over)} / U {fo(b.under)}
                         </span>
                       </div>
                     ))}

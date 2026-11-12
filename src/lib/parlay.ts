@@ -180,8 +180,8 @@ export function checkParlay(
 
   const heavy = legs.filter((l) => l.odds <= HEAVY_FAV);
   if (heavy.length)
-    checks.push({ level: "bad", text: `Heavy favorite leg (${HEAVY_FAV} or worse): ${heavy.map((l) => l.label).join(", ")}. Poor parlay value.` });
-  else if (legs.length) checks.push({ level: "ok", text: `No heavy favorites (nothing at ${HEAVY_FAV} or worse).` });
+    checks.push({ level: "bad", text: `Heavy favorite leg (1.33 decimal / ${HEAVY_FAV} or shorter): ${heavy.map((l) => l.label).join(", ")}. Poor parlay value.` });
+  else if (legs.length) checks.push({ level: "ok", text: `No heavy favorites (nothing at 1.33 decimal / ${HEAVY_FAV} or shorter).` });
 
   if (legs.length >= 2) {
     const conflicts: string[] = [];

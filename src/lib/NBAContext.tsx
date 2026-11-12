@@ -5,6 +5,7 @@ import type { Player, Bet, Injury, ParlayLeg } from "@/types";
 import { createState, fetchNBAData, processData, clearCache } from "@/lib/nba";
 import type { AppState, OddsPayload } from "@/lib/nba";
 import { store, save } from "@/lib/store";
+import type { OddsFormat } from "@/lib/odds";
 
 interface NBAContextType {
   state: AppState;
@@ -12,6 +13,8 @@ interface NBAContextType {
   error: string | null;
   refresh: () => Promise<void>;
   applyOdds: (odds: OddsPayload) => Promise<void>;
+  oddsFormat: OddsFormat;
+  setOddsFormat: (f: OddsFormat) => void;
   parlay: ParlayLeg[];
   addLeg: (leg: ParlayLeg) => void;
   setLegs: (legs: ParlayLeg[]) => void;
@@ -47,6 +50,11 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [parlay, setParlay] = useState<ParlayLeg[]>([]);
+  const [oddsFormat, setOddsFormatState] = useState<OddsFormat>("decimal");
+  const setOddsFormat = useCallback((f: OddsFormat) => {
+    setOddsFormatState(f);
+    save("oddsfmt", f);
+  }, []);
   const setLegs = useCallback((legs: ParlayLeg[]) => {
     setParlay(legs);
     save("parlay", legs);
@@ -118,6 +126,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     refresh();
     setBets(store<Bet[]>("bets", []));
     setParlay(store<ParlayLeg[]>("parlay", []));
+    setOddsFormatState(store<OddsFormat>("oddsfmt", "decimal"));
     setBankroll(store<number>("bank", 1000));
     setUnitPct(store<number>("unitpct", 1));
   }, [refresh]);
@@ -168,6 +177,8 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         error,
         refresh,
         applyOdds,
+        oddsFormat,
+        setOddsFormat,
         parlay,
         addLeg,
         setLegs,

@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNBA } from "@/lib/NBAContext";
 import { store, save } from "@/lib/store";
 import { fmtO, decOdds } from "@/lib/nba";
+import { fmtOdds, parseOdds } from "@/lib/odds";
+import { OddsInput } from "./OddsInput";
 
 const CHECK = [
   "Checked both teams' rest days and B2B status",
@@ -75,7 +78,24 @@ export function SystemsTab() {
   const [kellyO, setKellyO] = useState(-110);
   const [kellyF, setKellyF] = useState("0.25");
   const [kellyB, setKellyB] = useState(store<number>("bank", 1000));
-  const [plOdds, setPlOdds] = useState("-110, -110");
+  const { oddsFormat } = useNBA();
+  const [plOdds, setPlOdds] = useState(fmtOdds(-110, oddsFormat) + ", " + fmtOdds(-110, oddsFormat));
+  // re-express the typed legs when the odds format is switched
+  const fmtRef = useRef(oddsFormat);
+  useEffect(() => {
+    if (fmtRef.current === oddsFormat) return;
+    const old = fmtRef.current;
+    fmtRef.current = oddsFormat;
+    setPlOdds((t) =>
+      t
+        .split(",")
+        .map((x) => {
+          const a = parseOdds(x.trim(), old);
+          return a == null ? x.trim() : fmtOdds(a, oddsFormat);
+        })
+        .join(", "),
+    );
+  }, [oddsFormat]);
   const [plStake, setPlStake] = useState(10);
 
   const toggleCheck = (i: number) => {
@@ -110,8 +130,8 @@ export function SystemsTab() {
   let plOut = "";
   const legs = plOdds
     .split(",")
-    .map((x) => parseFloat(x))
-    .filter((x) => !isNaN(x) && Math.abs(x) >= 100);
+    .map((x) => parseOdds(x.trim(), oddsFormat))
+    .filter((x): x is number => x != null);
   const plD = legs.reduce((a, o) => a * dec(o), 1);
   if (legs.length >= 2) {
     const warn: string[] = [];
@@ -199,7 +219,7 @@ export function SystemsTab() {
               Win %<input type="number" value={kellyP} onChange={(e) => setKellyP(+e.target.value)} />
             </label>
             <label>
-              Odds<input type="number" value={kellyO} onChange={(e) => setKellyO(+e.target.value)} />
+              Odds ({oddsFormat})<OddsInput american={kellyO} onChange={setKellyO} />
             </label>
             <label>
               Fraction
@@ -219,7 +239,7 @@ export function SystemsTab() {
           <h3 style={{ marginTop: 0 }}>Parlay calculator</h3>
           <div className="form">
             <label>
-              Leg odds<input value={plOdds} onChange={(e) => setPlOdds(e.target.value)} />
+              Leg odds ({oddsFormat}, comma-separated)<input value={plOdds} onChange={(e) => setPlOdds(e.target.value)} />
             </label>
             <label>
               Stake<input type="number" value={plStake} onChange={(e) => setPlStake(+e.target.value)} />

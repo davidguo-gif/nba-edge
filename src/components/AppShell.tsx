@@ -12,7 +12,7 @@ import { TrackerTab } from "./TrackerTab";
 import { DataTab } from "./DataTab";
 
 export function AppShell() {
-  const { loading, error, activeTab, refresh } = useNBA();
+  const { loading, error, activeTab, refresh, oddsFormat, setOddsFormat } = useNBA();
 
   if (loading) {
     return (
@@ -50,6 +50,16 @@ export function AppShell() {
           🏀 NBA <b>Edge</b>
         </div>
         <Nav />
+        <label className="text-xs" style={{ marginLeft: "auto", color: "var(--mut)" }}>
+          Odds{" "}
+          <select
+            value={oddsFormat}
+            onChange={(e) => setOddsFormat(e.target.value as "decimal" | "american")}
+          >
+            <option value="decimal">Decimal (1.91)</option>
+            <option value="american">American (-110)</option>
+          </select>
+        </label>
       </header>
       <div style={{ display: activeTab === "slate" ? "block" : "none" }}>
         <SlateTab />
