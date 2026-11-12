@@ -24,11 +24,14 @@ jobs:
       - name: Fetch NBA data
         run: python scripts/fetch-data.py
 
+      - name: Fetch previous seasons (skips ones already saved)
+        run: node scripts/fetch-seasons.mjs 5
+
       - name: Commit updated data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/nbadata.json
+          git add public/nbadata.json public/seasons.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

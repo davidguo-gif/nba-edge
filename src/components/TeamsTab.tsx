@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { defChip, ord } from "@/lib/nba";
 import type { TeamData } from "@/types";
@@ -59,15 +59,32 @@ function cell(x: any, k: string): string {
 
 export function TeamsTab() {
   const { state, selTeam, setSelTeam } = useNBA();
-  const [y26Mode, setY26Mode] = useState(false);
+  // "current" = live view, "cur-only" = this season only, otherwise a past season key like "2024-25"
+  const [view, setView] = useState<string>("current");
+  const [past, setPast] = useState<Record<string, Record<string, any>>>({});
+  useEffect(() => {
+    fetch("/seasons.json")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setPast)
+      .catch(() => {});
+  }, []);
+  const pastSeasons = Object.keys(past).sort().reverse();
+  const pastMode = view !== "current" && view !== "cur-only";
+  const y26Mode = view === "cur-only";
   const [sortCol, setSortCol] = useState("net");
   const [sortDir, setSortDir] = useState(-1);
 
   const sy = !!state.synced;
-  const cols = STAT_COLS.filter((c) => sy ? (y26Mode ? c.y26 : c.all) : c.all);
+  const cols = STAT_COLS.filter((c) => (y26Mode ? c.y26 : c.all));
 
   const list = (Object.values(state.T) as TeamData[])
-    .map((t) => (y26Mode && t.y26 ? { ...t, ...t.y26, abbr: t.abbr, name: t.name } : t))
+    .map((t) =>
+      pastMode
+        ? { ...t, ...(past[view]?.[t.abbr] || {}), abbr: t.abbr, name: t.name }
+        : y26Mode && t.y26
+          ? { ...t, ...t.y26, abbr: t.abbr, name: t.name }
+          : t,
+    )
     .sort((a: any, b: any) => {
       const av = a[sortCol],
         bv = b[sortCol];
@@ -86,14 +103,15 @@ export function TeamsTab() {
         Click a column to sort and a team for defense vs position + injury report.
       </p>
       <div className="filters">
-        {sy && (
-          <button
-            className={`b sm${y26Mode ? " on" : " alt"}`}
-            onClick={() => setY26Mode(!y26Mode)}
-          >
-            2026 only
-          </button>
-        )}
+        <select value={view} onChange={(e) => setView(e.target.value)}>
+          <option value="current">Current season (ratings blended with last season)</option>
+          {sy && <option value="cur-only">Current season only</option>}
+          {pastSeasons.map((s) => (
+            <option key={s} value={s}>
+              {s} season (full regular season)
+            </option>
+          ))}
+        </select>
       </div>
       <div className="tbl-wrap">
         <table>
