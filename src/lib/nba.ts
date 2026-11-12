@@ -604,27 +604,27 @@ export function scheduleSpots(g: SlateGame) {
   if (g.aRest === 0 && g.hRest >= 1)
     out.push({
       t: `Road ${a} on B2B vs rested ${h}`,
-      l: "Fade road team ATS / team total Under (2-3 pt decline)",
+      l: "Tired road team tends to play worse: lean against it on the spread, or its team total Under (about 2-3 points worse)",
     });
   if (g.hRest >= 3 && g.aRest <= 2)
     out.push({
       t: `${h} has ${g.hRest}+ days rest vs traveling ${a}`,
-      l: "Back rested home team: spread or 1H spread",
+      l: "Rested home team has the edge: lean on its spread, or its first-half spread",
     });
   if (g.hRest === 0 && g.aRest === 0)
     out.push({
       t: "Both teams on B2B",
-      l: "Game total Under (lower pace, sloppy play)",
+      l: "Lean on the game total Under (slower pace, sloppier play)",
     });
   if (g.hFour || g.aFour)
     out.push({
       t: `4 games in 5 nights: ${g.hFour ? h : ""}${g.hFour && g.aFour ? " & " : ""}${g.aFour ? a : ""}`,
-      l: "Totals Under, fade tired team, Q4 props",
+      l: "Lean Under on totals, lean against the tired team, and watch fourth-quarter props",
     });
   if (Math.abs(g.spread) <= 5)
     out.push({
       t: `Projected close game (spread ${g.spread > 0 ? "+" : ""}${g.spread})`,
-      l: "Q4 Under / live Under, star points props Over (shortened rotation)",
+      l: "Fourth-quarter Under (including live betting); star players' points props lean Over because starters play more minutes in close games",
     });
   return out;
 }
