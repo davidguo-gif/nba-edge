@@ -43,38 +43,40 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen p-3" style={{ maxWidth: 1400, margin: "0 auto" }}>
-      <header
-        className="flex items-center gap-3 mb-3 pb-2"
-        style={{ borderBottom: "1px solid var(--border)" }}
-      >
-        <div className="text-lg font-semibold">
-          🏀 NBA <b>Edge</b>
+    <div className="min-h-screen" style={{ maxWidth: 1440, margin: "0 auto", padding: "0 16px" }}>
+      <header className="app-header">
+        <div style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 20 }}>🏀</span>
+          <span style={{ background: "linear-gradient(135deg, #e8eaf6 40%, #00e5ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>NBA Edge</span>
+          <span style={{ fontSize: 9, color: "var(--mut)", fontWeight: 400, marginLeft: 2 }}>v2</span>
         </div>
         <Nav />
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap", marginLeft: "auto" }}>
-          <span>⏰ <b>{TIME_OPTIONS.find((o) => o.value === timeHorizon)?.label || `${Math.round(timeHorizon / 24)}d`}</b></span>
-          <input
-            type="range"
-            min={0}
-            max={TIME_OPTIONS.length - 1}
-            step={1}
-            value={Math.max(0, TIME_OPTIONS.findIndex((o) => o.value === timeHorizon))}
-            onChange={(e) => setTimeHorizon(TIME_OPTIONS[+e.target.value].value)}
-            style={{ width: 72, cursor: "pointer", verticalAlign: "middle" }}
-            title="Time horizon for Slate, Props & Parlay"
-          />
-        </label>
-        <label className="text-xs" style={{ color: "var(--mut)" }}>
-          Odds{" "}
-          <select
-            value={oddsFormat}
-            onChange={(e) => setOddsFormat(e.target.value as "decimal" | "american")}
-          >
-            <option value="decimal">Decimal (1.91)</option>
-            <option value="american">American (-110)</option>
-          </select>
-        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap", cursor: "pointer" }}>
+            <span>⏰ <b style={{ color: "var(--blue)" }}>{TIME_OPTIONS.find((o) => o.value === timeHorizon)?.label || `${Math.round(timeHorizon / 24)}d`}</b></span>
+            <input
+              type="range"
+              min={0}
+              max={TIME_OPTIONS.length - 1}
+              step={1}
+              value={Math.max(0, TIME_OPTIONS.findIndex((o) => o.value === timeHorizon))}
+              onChange={(e) => setTimeHorizon(TIME_OPTIONS[+e.target.value].value)}
+              style={{ width: 72, verticalAlign: "middle" }}
+              title="Time horizon for Slate, Props & Parlay"
+            />
+          </label>
+          <label style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
+            Odds
+            <select
+              value={oddsFormat}
+              onChange={(e) => setOddsFormat(e.target.value as "decimal" | "american")}
+              style={{ fontSize: 11, padding: "3px 6px" }}
+            >
+              <option value="decimal">Decimal</option>
+              <option value="american">American</option>
+            </select>
+          </label>
+        </div>
       </header>
       {propDetail == null && (
         <>

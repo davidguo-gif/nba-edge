@@ -88,7 +88,7 @@ export function PropCardRow({
         </td>
       </tr>
       {open && (
-        <tr>
+        <tr className="expand-row">
           <td colSpan={8} style={{ padding: 0, borderBottom: "2px solid var(--blue)" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ padding: "12px 16px", cursor: "default", background: "rgba(59,130,246,0.04)" }}>
               {/* Analysis notes — clean, concise */}

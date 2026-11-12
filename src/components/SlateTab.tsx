@@ -24,7 +24,7 @@ function GameAnalysis({ g }: { g: SlateGame }) {
   const margin = g.spread === 0 ? "toss-up" : `${g.spread < 0 ? g.home : g.away} by ${Math.abs(g.spread)}`;
 
   return (
-    <tr>
+    <tr className="expand-row">
       <td colSpan={8} style={{ padding: 0, borderBottom: "2px solid var(--blue)" }}>
         <div onClick={(e) => e.stopPropagation()} style={{ padding: "12px 16px", cursor: "default", background: "rgba(59,130,246,0.04)" }}>
           <h3 style={{ marginTop: 0, marginBottom: 8 }}>Game Analysis — {g.away} @ {g.home}</h3>
