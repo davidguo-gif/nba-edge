@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import type { SlateGame } from "@/types";
 import { MARKET_NAMES } from "@/types";
-import { decOdds, clamp, windows, hit } from "@/lib/nba";
+import { decOdds, clamp, windows, hit, consensusProb } from "@/lib/nba";
 import { PropCardRow } from "./PropCard";
 
 export function PropsTab() {
@@ -47,29 +47,29 @@ export function PropsTab() {
     if (mf && p.market !== mf) return false;
     if (searchQ && !pl.name.toLowerCase().includes(searchQ.toLowerCase())) return false;
 
-    const w = windows(pl, state.seasonStart);
-    const rank = T[c.opp]?.rank[pl.pos]?.[p.market] || 15;
-    const defAdj = ((rank - 15.5) / 14.5) * 0.04;
-    const est = (ln: number) => {
-      const hh = [hit(w.l10, p.market, ln), hit(w.l15, p.market, ln), hit(w.cur, p.market, ln)];
-      const hr = 0.5 * hh[0].p + 0.3 * hh[1].p + 0.2 * hh[2].p;
-      return clamp(0.5 + (hr - 0.5) * 0.6 + defAdj, 0.25, 0.75);
-    };
+    // Weighted sharp consensus: compute true probability from sharp sportsbooks
+    const consOver = consensusProb(p.books, "over");
+    const consUnder = consensusProb(p.books, "under");
+    // Use the Over consensus probability; the Under is 1 - that
+    const baseProbOver = consOver.prob;
+    const baseProbUnder = consUnder.prob; // normally 1 - baseProbOver but compute independently
+
     let best: any = null;
     p.books.forEach((b) => {
-      const pO = est(b.line);
-      [{ side: "over", p: pO, odds: b.over }, { side: "under", p: 1 - pO, odds: b.under }].forEach(
+      [{ side: "over", p: baseProbOver, odds: b.over }, { side: "under", p: baseProbUnder, odds: b.under }].forEach(
         ({ side, p: prob, odds: o }) => {
+          if (o == null) return;
           const ev = prob * (decOdds(o) - 1) - (1 - prob);
           if (!best || ev > best.ev) best = { book: b.book, side, line: b.line, odds: o, ev, p: prob };
         },
       );
     });
+    const rank = T[c.opp]?.rank[pl.pos]?.[p.market] || 15;
     const conf = best?.ev >= 0.08 ? "Strong" : best?.ev >= 0.03 ? "Lean" : "Pass";
 
     if (leanFilter === "strong" && conf !== "Strong") return false;
     if (leanFilter === "lean" && conf !== "Strong" && conf !== "Lean") return false;
-    (p as any)._analysis = { rank, defAdj, best, conf };
+    (p as any)._analysis = { rank, defAdj: 0, best, conf, consensus: consOver };
     return true;
   });
 

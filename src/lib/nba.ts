@@ -9,7 +9,7 @@ import type {
   NBAData,
   Injury,
 } from "@/types";
-import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL } from "@/types";
+import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL, SHARP_BOOK_WEIGHTS, SHARP_BOOK_ALIAS } from "@/types";
 const posGroup = posGroupImport;
 
 /* ---------- state ---------- */
@@ -663,6 +663,53 @@ export const TIME_OPTIONS = [
   { value: 336, label: "2 weeks" },
   { value: 0, label: "All" },
 ] as const;
+/**
+ * Weighted consensus implied probability from sharp sportsbooks.
+ * For each book in `books`, if its name (lowercased) matches a key in SHARP_BOOK_WEIGHTS,
+ * its implied probability (1/decimal) contributes at that weight.
+ * Falls back to a simple average of all books if no sharp books are found.
+ */
+export function consensusProb(
+  books: PropBook[],
+  side: "over" | "under",
+): { prob: number; booksUsed: { name: string; weight: number }[] } {
+  const weighted: { name: string; weight: number; prob: number }[] = [];
+  let totalWeight = 0;
+
+  books.forEach((b) => {
+    const key = b.book.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const weight = SHARP_BOOK_WEIGHTS[key];
+    if (!weight) return;
+    const odds = b[side] as number | undefined;
+    if (odds == null) return;
+    const dec = odds > 0 ? 1 + odds / 100 : 1 + 100 / -odds;
+    const prob = 1 / dec;
+    weighted.push({
+      name: SHARP_BOOK_ALIAS[key] || b.book,
+      weight,
+      prob,
+    });
+    totalWeight += weight;
+  });
+
+  if (weighted.length === 0) {
+    // No sharp books found — fall back to a simple average of all books
+    let sum = 0;
+    let count = 0;
+    books.forEach((b) => {
+      const odds = b[side] as number | undefined;
+      if (odds == null) return;
+      const dec = odds > 0 ? 1 + odds / 100 : 1 + 100 / -odds;
+      sum += 1 / dec;
+      count++;
+    });
+    const avg = count > 0 ? sum / count : 0.5;
+    return { prob: avg, booksUsed: [{ name: "avg", weight: 1 }] };
+  }
+
+  const prob = weighted.reduce((s, w) => s + w.prob * (w.weight / totalWeight), 0);
+  return { prob, booksUsed: weighted };
+}
 
 export function clamp(x: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, x));

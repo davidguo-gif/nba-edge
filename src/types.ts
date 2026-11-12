@@ -230,6 +230,30 @@ export const BOOKS = [
   "DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN BET", "Fanatics",
 ];
 
+/** Sharp book weights for weighted-consensus EV calculation (sums to 100%). */
+export const SHARP_BOOK_WEIGHTS: Record<string, number> = {
+  pinnacle: 25,
+  draftkingspredictions: 17,
+  kalshi: 17,
+  bookmaker: 8,
+  circa: 8,
+  novig: 8,
+  polymarket: 8,
+  prophetx: 8,
+};
+
+/** Map short/normalized book names to their canonical label. */
+export const SHARP_BOOK_ALIAS: Record<string, string> = {
+  pinnacle: "Pinnacle (PS3838)",
+  draftkingspredictions: "DraftKings Predictions",
+  kalshi: "Kalshi",
+  bookmaker: "Bookmaker",
+  circa: "Circa",
+  novig: "Novig",
+  polymarket: "Polymarket",
+  prophetx: "ProphetX",
+};
+
 export const BOOK_URLS: Record<string, string> = {
   DraftKings: "https://sportsbook.draftkings.com",
   FanDuel: "https://sportsbook.fanduel.com",
