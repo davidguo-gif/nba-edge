@@ -61,6 +61,9 @@ th.sorted { color: var(--text); }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .card .grid { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
 .card table { table-layout: auto; max-width: 100%; }
+.card table.mini { table-layout: fixed; width: 100%; font-size: 11px; }
+.card table.mini th, .card table.mini td { padding: 3px 4px; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+.card table.mini th:first-child, .card table.mini td:first-child { text-align: left; width: 34%; }
 .card.stat { text-align: center; }
 .card.stat b { font-size: 1.5rem; display: block; }
 

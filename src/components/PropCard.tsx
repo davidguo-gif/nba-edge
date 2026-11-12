@@ -115,14 +115,14 @@ export function PropCard({
   const oppName = opp ? state.T[opp]?.name || opp : "the opponent";
   const w = windows(pl, state.seasonStart);
   const h2h = opp ? pl.log.filter((g) => g.opp === opp) : [];
-  const curLabel = `${state.season} season`;
-  const prevLabel = `${prevSeasonLabel(state.season)} season`;
+  const curLabel = state.season;
+  const prevLabel = prevSeasonLabel(state.season);
   const sets: { key: typeof win; label: string; games: GameRow[] }[] = [
     { key: "l10", label: "Last 10", games: w.l10 },
     { key: "l15", label: "Last 15", games: w.l15 },
     { key: "cur", label: curLabel, games: w.cur },
     { key: "prev", label: prevLabel, games: w.prev },
-    { key: "h2h", label: `vs ${opp || "opp"} (head to head)`, games: h2h },
+    { key: "h2h", label: `vs ${opp || "opp"} (H2H)`, games: h2h },
   ];
   const chosen = sets.find((s) => s.key === win)!;
 
@@ -257,10 +257,10 @@ export function PropCard({
           <BarChart games={chosen.games as GameRow[]} stat={p.market} line={line} />
 
           {/* table (click a row to graph it) */}
-          <table style={{ width: "100%", fontSize: 12, marginTop: 4 }}>
+          <table className="mini" style={{ marginTop: 4 }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left" }}>Period (click to graph)</th>
+                <th>Period</th>
                 <th>Games</th>
                 <th>Over</th>
                 <th>Under</th>
@@ -284,23 +284,22 @@ export function PropCard({
                     }}
                   >
                     <td>{s.label}</td>
-                    <td style={{ textAlign: "center" }}>{r.n}</td>
-                    <td style={{ textAlign: "center" }} className="ok">
-                      {r.o}
-                    </td>
-                    <td style={{ textAlign: "center" }} className="bad">
+                    <td>{r.n}</td>
+                    <td className="ok">{r.o}</td>
+                    <td className="bad" title={r.push ? `${r.push} push` : undefined}>
                       {r.u}
-                      {r.push ? ` (${r.push} push)` : ""}
+                      {r.push ? `+${r.push}p` : ""}
                     </td>
-                    <td style={{ textAlign: "center" }}>{pct(r.pct)}</td>
-                    <td style={{ textAlign: "center" }}>{avg == null ? "-" : avg.toFixed(1)}</td>
+                    <td>{pct(r.pct)}</td>
+                    <td>{avg == null ? "-" : avg.toFixed(1)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           <ul className="clean text-xs" style={{ color: "var(--mut)", margin: "4px 0 8px" }}>
-            <li>Over = finished above {line}; Under = below; exactly {line} = push</li>
+            <li>Tap a row to graph that period</li>
+            <li>Over = finished above {line}; Under = below; exactly {line} = push (p)</li>
             <li>
               H2H = games vs {oppName} in the last 2 seasons{h2h.length === 0 ? " (none on record)" : ""}
             </li>
