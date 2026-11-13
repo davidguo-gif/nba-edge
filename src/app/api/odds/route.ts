@@ -35,6 +35,32 @@ const QUARTER_MARKETS = [
   "player_q4_assists",
 ];
 
+/**
+ * The Odds API bookmaker keys. Sharp books (US exchanges + Pinnacle in the EU region) are
+ * only used to estimate the true probability; the retail books are what you actually bet at.
+ */
+const SHARP: Record<string, string> = {
+  pinnacle: "Pinnacle",
+  kalshi: "Kalshi",
+  novig: "Novig",
+  polymarket: "Polymarket",
+  prophetx: "ProphetX",
+};
+const RETAIL: Record<string, string> = {
+  draftkings: "DraftKings",
+  fanduel: "FanDuel",
+  betmgm: "BetMGM",
+  williamhill_us: "Caesars",
+  espnbet: "theScore Bet",
+  fanatics: "Fanatics",
+  betrivers: "BetRivers",
+  hardrockbet: "Hard Rock Bet",
+  ballybet: "Bally Bet",
+  betparx: "betPARX",
+};
+// us/us2 = retail books, us_ex = Kalshi/Novig/Polymarket/ProphetX, eu = Pinnacle
+const REGIONS = "us,us2,us_ex,eu";
+
 const TEAM_ABBR: Record<string, string> = {
   "Atlanta Hawks": "ATL",
   "Boston Celtics": "BOS",
@@ -103,7 +129,7 @@ export async function GET(req: NextRequest) {
       const dt = new Date(e.commence_time).getTime() - Date.now();
       return (
         dt > -3 * 3600e3 &&
-        dt < 36 * 3600e3 &&
+        dt < 48 * 3600e3 &&
         teamAbbr(e.home_team) &&
         teamAbbr(e.away_team)
       );
@@ -171,41 +197,47 @@ export async function GET(req: NextRequest) {
         { markets: QUARTER_MARKETS, group: "quarter" },
       ];
 
-      const acc: Record<string, any> = {};
+      const acc: Record<string, { retail: Record<string, any>; sharp: Record<string, any> }> = {};
       const names: Record<string, string> = {};
 
       for (const { markets, group } of marketGroups) {
-        const oddsUrl = `${API}/events/${ev.id}/odds?apiKey=${key}&regions=us&markets=${markets.join(",")}&oddsFormat=american`;
+        // quarter props are only priced by US retail books, so don't pay for the other regions
+        const regions = group === "main" ? REGIONS : "us";
+        const oddsUrl = `${API}/events/${ev.id}/odds?apiKey=${key}&regions=${regions}&markets=${markets.join(",")}&oddsFormat=american`;
         const oddsRes = await fetch(oddsUrl);
         if (!oddsRes.ok) continue;
 
         const data = await oddsRes.json();
 
         data.bookmakers.forEach((bk: any) => {
+          const sharpName = SHARP[bk.key];
+          const retailName = RETAIL[bk.key];
+          const name = sharpName || retailName;
+          if (!name) return; // DFS apps, offshore books, other regions
+          const side = sharpName ? "sharp" : "retail";
           bk.markets.forEach((m: any) => {
             const mk = MK_MAP[m.key];
             if (!mk) return;
 
             m.outcomes.forEach((o: any) => {
               const k = norm(o.description) + "|" + mk;
-              if (!acc[k]) acc[k] = {};
+              if (!acc[k]) acc[k] = { retail: {}, sharp: {} };
               names[k] = o.description;
-              if (!acc[k][bk.title]) {
-                acc[k][bk.title] = { book: bk.title, line: o.point };
-              }
-              acc[k][bk.title].line = o.point;
-              if (o.name === "Over") acc[k][bk.title].over = o.price;
-              else if (o.name === "Under") acc[k][bk.title].under = o.price;
+              const book = acc[k][side][name] || (acc[k][side][name] = { book: name, line: o.point });
+              book.line = o.point;
+              if (o.name === "Over") book.over = o.price;
+              else if (o.name === "Under") book.under = o.price;
             });
           });
         });
       }
 
-      Object.entries(acc).forEach(([key, bookData]: [string, any]) => {
-        const books = Object.values(bookData).filter(
-          (b: any) => b.over != null && b.under != null,
-        );
-        if (!books.length) return;
+      Object.entries(acc).forEach(([key, bookData]) => {
+        const complete = (m: Record<string, any>) =>
+          Object.values(m).filter((b: any) => b.over != null && b.under != null);
+        const books = complete(bookData.retail);
+        if (!books.length) return; // nothing to bet at
+        const sharp = complete(bookData.sharp);
         const lines = books.map((b: any) => b.line).sort((a: number, b: number) => a - b);
         allProps.push({
           name: names[key],
@@ -213,6 +245,7 @@ export async function GET(req: NextRequest) {
           market: key.split("|")[1],
           line: lines[Math.floor((lines.length - 1) / 2)],
           books,
+          sharp,
         });
       });
     }

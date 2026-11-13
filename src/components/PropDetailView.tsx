@@ -30,32 +30,32 @@ function BarChart({ games, stat, line }: { games: GameRow[]; stat: string; line:
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }} role="img">
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={padL} x2={W} y1={y(t)} y2={y(t)} stroke="#334155" strokeWidth={0.5} />
-          <text x={padL - 4} y={y(t) + 3} fontSize={10} fill="#94a3b8" textAnchor="end">{t}</text>
+          <line x1={padL} x2={W} y1={y(t)} y2={y(t)} stroke="#e5e7eb" strokeWidth={1} />
+          <text x={padL - 4} y={y(t) + 3} fontSize={10} fill="#6b7280" textAnchor="end">{t}</text>
         </g>
       ))}
       {data.map((g, i) => {
         const v = vals[i], x = padL + i * slot + (slot - bw) / 2;
-        const color = v > line ? "#4ade80" : v < line ? "#f87171" : "#94a3b8";
+        const color = v > line ? "#16a34a" : v < line ? "#dc2626" : "#9ca3af";
         return (
           <g key={i}>
             <title>{`${shortDate(g.date)} ${g.home ? "vs" : "@"} ${g.opp}: ${v}`}</title>
             <rect x={x} y={y(v)} width={bw} height={Math.max(1, y(0) - y(v))} fill={color} rx={2} />
-            {!many && <text x={x + bw / 2} y={y(v) - 4} fontSize={11} fill="#e2e8f0" textAnchor="middle">{v}</text>}
-            {!many && <text x={x + bw / 2} y={H - padB + 14} fontSize={10} fill="#94a3b8" textAnchor="middle">{g.home ? "" : "@"}{g.opp}</text>}
-            {!many && <text x={x + bw / 2} y={H - padB + 24} fontSize={9} fill="#64748b" textAnchor="middle">{shortDate(g.date)}</text>}
+            {!many && <text x={x + bw / 2} y={y(v) - 4} fontSize={11} fill="#111827" textAnchor="middle">{v}</text>}
+            {!many && <text x={x + bw / 2} y={H - padB + 14} fontSize={10} fill="#6b7280" textAnchor="middle">{g.home ? "" : "@"}{g.opp}</text>}
+            {!many && <text x={x + bw / 2} y={H - padB + 24} fontSize={9} fill="#9ca3af" textAnchor="middle">{shortDate(g.date)}</text>}
           </g>
         );
       })}
-      <line x1={padL} x2={W} y1={y(line)} y2={y(line)} stroke="#fcd34d" strokeWidth={2} strokeDasharray="6 3" />
-      <text x={W - 2} y={y(line) - 5} fontSize={11} fill="#fcd34d" textAnchor="end">Line {line}</text>
+      <line x1={padL} x2={W} y1={y(line)} y2={y(line)} stroke="#d97706" strokeWidth={2} strokeDasharray="6 3" />
+      <text x={W - 2} y={y(line) - 5} fontSize={11} fill="#d97706" textAnchor="end">Line {line}</text>
     </svg>
   );
 }
 
 export function PropDetailView() {
   const { state, propDetail, setPropDetail, oddsFormat, addBet, addLeg, setActiveTab } = useNBA();
-  const { PROPS, PLAYERS, CTX, SLATE, T } = state;
+  const { PROPS, PLAYERS, SLATE, T } = state;
   const fo = (o: number) => fmtOdds(o, oddsFormat);
   const [line, setLine] = useState<number>(0);
   const [win, setWin] = useState<string>("l10");
@@ -64,9 +64,8 @@ export function PropDetailView() {
   // Find the prop by tracking its index — fallback to scanning by id
   const p = prop;
   const pl: Player | undefined = p ? PLAYERS[p.pid] : undefined;
-  const c = pl ? CTX[pl.team] : undefined;
-  const gm: SlateGame | null = c ? SLATE[c.gid] : null;
-  const opp = c ? c.opp : "";
+  const gm: SlateGame | null = p ? SLATE[p.gid] || null : null;
+  const opp = p ? p.opp : "";
   const oppName = opp ? state.T[opp]?.name || opp : "";
 
   useEffect(() => {
@@ -105,11 +104,11 @@ export function PropDetailView() {
   const under = bestPriceAtLine(p.books, "under", p.line);
 
   // Use the same analysis computed by PropsTab (L10/L15/szn weighted, defense-adjusted, best EV)
-  const analysis = (p as any)._analysis as { rank: number; defAdj: number; best: any; conf: string; consensus: any } | undefined;
-  const useEdge = analysis?.best?.ev ?? 0;
+  const analysis = p._analysis;
+  const useEdge = analysis && !analysis.noSharp ? analysis.best.ev : 0;
   const useConf = analysis?.conf ?? "Pass";
   const useRank = analysis?.rank ?? (opp ? T[opp]?.rank?.[pl.pos]?.[p.market] || 15 : 15);
-  const useBest = analysis?.best;
+  const useBest = analysis && !analysis.noSharp ? analysis.best : undefined;
   const edgeOk = useEdge >= 0.03;
 
   // Compute the simpler edge too for display when analysis isn't available
@@ -118,7 +117,7 @@ export function PropDetailView() {
   const simpleEdge = seaHit - seaImp;
 
   // Use the analysis edge if available, otherwise fall back to simple
-  const edge = analysis?.best ? useEdge : simpleEdge;
+  const edge = useBest ? useEdge : simpleEdge;
 
   const d = defExplain(useRank, pl.pos, p.market);
   const actualRank = useRank;
@@ -149,11 +148,11 @@ export function PropDetailView() {
           <div>
             <h2 style={{ margin: 0 }}>{pl.name} · {p.line} {MARKET_NAMES[p.market]}</h2>
             <div className="text-sm note">
-              {pl.team} · {posFull(pl.posRaw)} · <span className="tag" style={{fontSize:9,padding:'0 4px',background:'#1e293b',color:'#94a3b8',verticalAlign:'middle'}}>{posGroupLabel(pl.pos)}</span> · {gLabel} {gm ? `· ${gm.time}` : ""}
+              {pl.team} · {posFull(pl.posRaw)} · {posGroupLabel(pl.pos)} · {gLabel} {gm ? `· ${gm.time}` : ""}
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className={`tag ${useConf === "Strong" ? "ok" : useConf === "Lean" ? "warn" : ""}`} style={useConf === "Pass" ? { background: "var(--card2)", color: "var(--mut)" } : undefined}>
+            <div className={`tag ${useConf === "Strong" ? "ok" : useConf === "Lean" ? "warn" : ""}`}>
               {useConf}
             </div>
           </div>
@@ -181,19 +180,19 @@ export function PropDetailView() {
 
         {/* Best prices */}
         <div className="grid g2" style={{ gap: 8, gridTemplateColumns: "1fr 1fr" }}>
-          <div style={{ background: "rgba(34,197,94,0.08)", padding: 10, borderRadius: 6, border: "1px solid rgba(34,197,94,0.2)" }}>
+          <div className="side over">
             <div className="text-sm"><b>OVER {over.line}</b></div>
             <div className="text-xs">{fo(over.price)} @ {over.book}</div>
             <div className="flex gap-1 mt-1" style={{ display: "flex", gap: 6, marginTop: 4 }}>
-              <button className="b sm" onClick={() => addBet(`${pl.name} Over ${over.line} ${MARKET_LABELS[p.market]}`, over.book, over.price, 1)}>+ Bet</button>
+              <button className="b sm" onClick={() => addBet(`${pl.name} Over ${over.line} ${MARKET_LABELS[p.market]}`, over.book, over.price, 1, undefined, { player: pl.name, market: p.market, line: over.line, side: "over", date: p.date })}>+ Bet</button>
               <button className="b sm alt" onClick={() => addToParlay("over")}>+ Parlay</button>
             </div>
           </div>
-          <div style={{ background: "rgba(239,68,68,0.08)", padding: 10, borderRadius: 6, border: "1px solid rgba(239,68,68,0.2)" }}>
+          <div className="side under">
             <div className="text-sm"><b>UNDER {under.line}</b></div>
             <div className="text-xs">{fo(under.price)} @ {under.book}</div>
             <div className="flex gap-1 mt-1" style={{ display: "flex", gap: 6, marginTop: 4 }}>
-              <button className="b sm" onClick={() => addBet(`${pl.name} Under ${under.line} ${MARKET_LABELS[p.market]}`, under.book, under.price, 1)}>+ Bet</button>
+              <button className="b sm" onClick={() => addBet(`${pl.name} Under ${under.line} ${MARKET_LABELS[p.market]}`, under.book, under.price, 1, undefined, { player: pl.name, market: p.market, line: under.line, side: "under", date: p.date })}>+ Bet</button>
               <button className="b sm alt" onClick={() => addToParlay("under")}>+ Parlay</button>
             </div>
           </div>
@@ -210,15 +209,9 @@ export function PropDetailView() {
                 ? `+${(edge * 100).toFixed(1)}% — above 3% threshold, playable`
                 : edge > 0
                   ? `+${(edge * 100).toFixed(1)}% — below 3% threshold`
-                  : "No edge found"} {analysis?.consensus?.booksUsed?.filter((b: any) => b.name !== "avg").length > 0
-                    ? `(sharp: ${analysis.consensus.booksUsed.filter((b: any) => b.name !== "avg").map((b: any) => b.name).join(", ")})`
-                    : "(consensus)"}</>
+                  : "No edge found"} (sharp: {analysis!.consensus.booksUsed.map((b) => b.name).join(", ")})</>
             ) : (
-              <>{edge > 0.03
-                ? `+${(edge * 100).toFixed(1)}% — above 3% threshold`
-                : edge > 0
-                  ? `+${(edge * 100).toFixed(1)}% — below 3% threshold`
-                  : "No edge found"}</>
+              <>No sharp book has priced this exact line, so +EV can't be measured.</>
             )}
           </li>
           {useBest && (
@@ -251,6 +244,11 @@ export function PropDetailView() {
               </li>
             );
           })()}
+          {analysis && analysis.injury.items.map((it, ii) => (
+            <li key={`inj${ii}`} className="row" style={{ color: it.side === "self" ? "var(--red)" : it.shift > 0 ? "var(--green)" : undefined }}>
+              <b>Injury:</b> {it.detail}{it.shift !== 0 && <span className="note"> ({it.shift > 0 ? "favors Over" : "favors Under"})</span>}
+            </li>
+          ))}
           {gm && (gm.hRest === 0 || gm.aRest === 0) && (
             <li className="row">
               <b>Rest:</b> {pl.team === gm.home ? "Home" : "Away"} on {pl.team === gm.home ? gm.hRest : gm.aRest} days rest
@@ -298,7 +296,7 @@ export function PropDetailView() {
                   const avg = s.r.n ? s.games.reduce((t, g: any) => t + g[p.market], 0) / s.r.n : null;
                   return (
                     <tr key={s.key} onClick={() => setWin(s.key)}
-                      style={{ cursor: "pointer", background: win === s.key ? "rgba(96,165,250,0.15)" : "transparent" }}>
+                      style={{ cursor: "pointer", background: win === s.key ? "var(--blue-soft)" : "transparent" }}>
                       <td>{s.label}</td>
                       <td>{s.r.n}</td><td className="ok">{s.r.o}</td>
                       <td className="bad">{s.r.u}{s.r.push ? `+${s.r.push}p` : ""}</td>
@@ -310,18 +308,18 @@ export function PropDetailView() {
             </table>
           </div>
           <div>
-            {analysis?.consensus?.booksUsed && analysis.consensus.booksUsed.length > 0 && analysis.consensus.booksUsed[0].name !== "avg" && (
+            {analysis && analysis.consensus.booksUsed.length > 0 && (
               <div style={{ marginBottom: 10 }}>
-                <h3 style={{ marginTop: 0, marginBottom: 4 }}>Sharp consensus</h3>
-                {analysis.consensus.booksUsed.map((sb: any, sbi: number) => (
-                  <div key={sbi} className="text-xs" style={{ background: "rgba(179,136,255,0.08)", border: "1px solid rgba(179,136,255,0.2)", padding: "3px 8px", borderRadius: 4, marginBottom: 2, display: "flex", justifyContent: "space-between" }}>
+                <h3 style={{ marginTop: 0, marginBottom: 4 }}>Sharp books (+EV only)</h3>
+                {analysis.consensus.booksUsed.map((sb, sbi) => (
+                  <div key={sbi} className="text-xs chip-book sharp" style={{ marginBottom: 2, display: "flex", justifyContent: "space-between" }}>
                     <span><b>{sb.name}</b> ({(sb.weight).toFixed(1)}% weight)</span>
                     <span>{sb.line}: {sb.odds > 0 ? "+" + sb.odds : sb.odds} · {(sb.prob * 100).toFixed(1)}% implied</span>
                   </div>
                 ))}
               </div>
             )}
-            <h3 style={{ marginTop: 0 }}>Sportsbooks</h3>
+            <h3 style={{ marginTop: 0 }}>Sportsbooks (to bet)</h3>
             {p.books.map((b: PropBook, bi: number) => (
               <div key={bi} className="text-xs" style={{ background: "var(--bg)", padding: "3px 6px", borderRadius: 4, marginBottom: 2, display: "flex", justifyContent: "space-between" }}>
                 <span>{BOOK_URLS[b.book] ? <a href={BOOK_URLS[b.book]} target="_blank" rel="noopener">{b.book}</a> : b.book}</span>

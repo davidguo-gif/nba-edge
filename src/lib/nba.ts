@@ -9,7 +9,7 @@ import type {
   NBAData,
   Injury,
 } from "@/types";
-import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL, SHARP_BOOK_WEIGHTS, SHARP_BOOK_ALIAS, CONSENSUS_DESCRIPTION } from "@/types";
+import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL } from "@/types";
 const posGroup = posGroupImport;
 
 /* ---------- state ---------- */
@@ -107,7 +107,9 @@ export function clearCache() {
 
 /* ---------- data processing ---------- */
 const CUTOFF = "2026-01-01";
-const todayET = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+export const etDate = (d: Date | string | number) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(d));
+export const todayET = () => etDate(new Date());
 const addDays = (d: string, n: number) =>
   new Date(Date.parse(d + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 const dayNum = (d: string) => Math.round(Date.parse(d + "T00:00:00Z") / 864e5);
@@ -237,7 +239,7 @@ export const prevSeasonLabel = (season: string) => {
   return `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
 };
 
-const normName = (s: string) =>
+export const normName = (s: string) =>
   (s || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -248,7 +250,7 @@ const normName = (s: string) =>
 export interface OddsPayload {
   ts: number;
   games: { home: string; away: string; dt?: string }[];
-  props: { name: string; team?: string[]; market: string; line: number; books: any[] }[];
+  props: { name: string; team?: string[]; market: string; line: number; books: any[]; sharp?: any[] }[];
 }
 
 export function processData(S: NBAData, state: AppState, odds?: OddsPayload | null): void {
@@ -397,7 +399,19 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
           reb: r[9],
           ast: r[10],
           fg3: r[11],
+          // steals/blocks (columns 16-17) only exist in data fetched after they were added: NaN = unknown
+          stl: r.length > 16 ? r[16] : NaN,
+          blk: r.length > 17 ? r[17] : NaN,
+          tov: r[15] || 0,
+          fga: r[12] || 0,
+          fta: r[13] || 0,
           pra: r[8] + r[9] + r[10],
+          pts_ast: r[8] + r[10],
+          pts_reb: r[8] + r[9],
+          reb_ast: r[9] + r[10],
+          blk_stl: (r[16] ?? NaN) + (r[17] ?? NaN),
+          dd: [r[8], r[9], r[10]].filter((x) => x >= 10).length >= 2 ? 1 : 0,
+          td: [r[8], r[9], r[10]].filter((x) => x >= 10).length >= 3 ? 1 : 0,
         };
       });
     // averages are for the current season; fall back to everything if none yet
@@ -432,29 +446,33 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
   // tonight's schedule
   state.SLATE.length = 0;
   Object.keys(state.CTX).forEach((k) => delete state.CTX[k]);
-  let sl: { home: string; away: string; dt?: string; status?: string }[] =
+  const sl: { home: string; away: string; dt?: string; status?: string }[] =
     S.slate && S.slate.date === today
       ? S.slate.games.filter((g) => state.T[g.home] && state.T[g.away])
       : [];
-  // data file's schedule is stale (or empty): use the games the odds feed returned
-  if (!sl.length && odds?.games?.length)
-    sl = odds.games.filter((g) => state.T[g.home] && state.T[g.away]);
+  // add the games the odds feed returned (tomorrow's games, or all of them if the data file is stale)
+  (odds?.games || []).forEach((g) => {
+    if (!state.T[g.home] || !state.T[g.away]) return;
+    if (!sl.some((x) => x.home === g.home && x.away === g.away)) sl.push(g);
+  });
+  sl.sort((a, b) => (a.dt || "9").localeCompare(b.dt || "9"));
 
-  const restOf = (ab: string) => {
-    const ds = (teamDates[ab] || []).filter((d) => d < today);
+  const restOf = (ab: string, gameDate: string) => {
+    const ds = (teamDates[ab] || []).filter((d) => d < gameDate);
     const last = ds[ds.length - 1];
     return {
-      rest: last ? Math.min(4, dayNum(today) - dayNum(last) - 1) : 3,
+      rest: last ? Math.min(4, dayNum(gameDate) - dayNum(last) - 1) : 3,
       four:
-        ds.filter((d) => dayNum(today) - dayNum(d) <= 4).length >= 3,
+        ds.filter((d) => dayNum(gameDate) - dayNum(d) <= 4).length >= 3,
     };
   };
 
   sl.forEach((g, i) => {
+    const gameDate = g.dt ? etDate(g.dt) : today;
     const H = state.T[g.home],
       A = state.T[g.away],
-      hr = restOf(g.home),
-      ar = restOf(g.away);
+      hr = restOf(g.home, gameDate),
+      ar = restOf(g.away, gameDate);
     const adj =
       (hr.rest === 0 ? -1.5 : hr.rest >= 3 ? 0.8 : 0) -
       (ar.rest === 0 ? -1.5 : ar.rest >= 3 ? 0.8 : 0);
@@ -483,6 +501,7 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
       aFour: ar.four,
       model: true,
       dt: g.dt,
+      date: gameDate,
       time: g.dt
         ? new Date(g.dt).toLocaleTimeString([], {
             hour: "numeric",
@@ -491,7 +510,8 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
         : g.status || "",
     };
     state.SLATE.push(gm);
-    state.CTX[g.home] = {
+    // CTX holds each team's next game; a team on a back-to-back keeps the earlier one
+    if (!state.CTX[g.home]) state.CTX[g.home] = {
       opp: g.away,
       home: true,
       rest: hr.rest,
@@ -501,7 +521,7 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
       total,
       gid: i,
     };
-    state.CTX[g.away] = {
+    if (!state.CTX[g.away]) state.CTX[g.away] = {
       opp: g.home,
       home: false,
       rest: ar.rest,
@@ -526,6 +546,11 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
       // prefer the player whose team is in the game this prop belongs to
       const pl = cands.find((p) => op.team?.includes(p.team)) || cands[0];
       if (!pl) return;
+      // the game this prop belongs to (matched on the two teams in the odds event)
+      let gid = op.team ? state.SLATE.findIndex((g) => g.home === op.team![0] && g.away === op.team![1]) : -1;
+      if (gid < 0) gid = state.CTX[pl.team]?.gid ?? -1;
+      const game = gid >= 0 ? state.SLATE[gid] : null;
+      if (!game || (game.home !== pl.team && game.away !== pl.team)) return;
       const proj = (() => {
         if (!AVG_MARKETS.includes(op.market)) return null;
         switch (op.market) {
@@ -543,8 +568,12 @@ export function processData(S: NBAData, state: AppState, odds?: OddsPayload | nu
         pname: pl.name,
         market: op.market,
         line: op.line,
-        proj: Math.round((proj ?? 0) * 10) / 10,
+        proj: Number.isFinite(proj) ? Math.round((proj ?? 0) * 10) / 10 : 0,
         books: op.books,
+        sharp: op.sharp || [],
+        date: game.date || today,
+        gid,
+        opp: pl.team === game.home ? game.away : game.home,
       });
     });
   }
@@ -654,288 +683,6 @@ export function decOdds(o: number): number {
   return o > 0 ? 1 + o / 100 : 1 + 100 / -o;
 }
 
-export const TIME_OPTIONS = [
-  { value: 24, label: "Today" },
-  { value: 48, label: "2 days" },
-  { value: 72, label: "3 days" },
-  { value: 120, label: "5 days" },
-  { value: 168, label: "1 week" },
-  { value: 336, label: "2 weeks" },
-  { value: 0, label: "All" },
-] as const;
-/**
- * Weighted consensus implied probability from sharp sportsbooks.
- * For each book in `books`, if its name (lowercased) matches a key in SHARP_BOOK_WEIGHTS,
- * its implied probability (1/decimal) contributes at that weight.
- * Falls back to a simple average of all books if no sharp books are found.
- */
-export function consensusProb(
-  books: PropBook[],
-  side: "over" | "under",
-): { prob: number; booksUsed: { name: string; weight: number; odds: number; line: number }[] } {
-  const weighted: { name: string; weight: number; prob: number; odds: number; line: number }[] = [];
-  let totalWeight = 0;
-
-  books.forEach((b) => {
-    const key = b.book.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const weight = SHARP_BOOK_WEIGHTS[key];
-    if (!weight) return;
-    const odds = b[side] as number | undefined;
-    if (odds == null) return;
-    const dec = odds > 0 ? 1 + odds / 100 : 1 + 100 / -odds;
-    const prob = 1 / dec;
-    weighted.push({
-      name: SHARP_BOOK_ALIAS[key] || b.book,
-      weight,
-      prob,
-      odds,
-      line: b.line,
-    });
-    totalWeight += weight;
-  });
-
-  if (weighted.length === 0) {
-    // No sharp books found — fall back to a simple average of all books
-    let sum = 0;
-    let count = 0;
-    books.forEach((b) => {
-      const odds = b[side] as number | undefined;
-      if (odds == null) return;
-      const dec = odds > 0 ? 1 + odds / 100 : 1 + 100 / -odds;
-      sum += 1 / dec;
-      count++;
-    });
-    const avg = count > 0 ? sum / count : 0.5;
-    return { prob: avg, booksUsed: [{ name: "avg", weight: 1, odds: 0, line: 0 }] };
-  }
-
-  const prob = weighted.reduce((s, w) => s + w.prob * (w.weight / totalWeight), 0);
-  return { prob, booksUsed: weighted };
-}
-
-/**
- * Bet rating system based on the TopEndSports NBA Betting Strategy guide.
- * Scores 1-100 using: schedule/rest, defense matchup, hit-rate edge,
- * position fatigue, injury impact, pace context, and Q4 dynamics.
- * Returns a rating object with letter grade, score, and factor breakdown.
- */
-export interface BetRating {
-  score: number; // 1-100
-  grade: "A" | "B" | "C" | "D" | "F";
-  factors: { name: string; impact: "positive" | "negative" | "neutral"; detail: string }[];
-}
-
-export function calculateBetRating(opts: {
-  pl: Player;
-  gm: SlateGame | null;
-  market: string;
-  line: number;
-  opp: string;
-  oppName: string;
-  rank: number;
-  ev: number;
-  l10HitRate: number | null;
-  seasonHitRate: number | null;
-  injuries: Record<string, Injury[]>;
-  T: Record<string, TeamData>;
-}): BetRating {
-  const factors: BetRating["factors"] = [];
-  let score = 50; // neutral baseline
-
-  const { pl, gm, market, line, opp, rank, ev, l10HitRate, seasonHitRate, injuries, T } = opts;
-
-  // 1. Schedule/Rest (topendsports: "schedule analysis is the most accessible edge")
-  if (gm) {
-    const isHome = pl.team === gm.home;
-    const rest = isHome ? gm.hRest : gm.aRest;
-    const oppRest = isHome ? gm.aRest : gm.hRest;
-    const isB2B = rest === 0;
-    const isFour = isHome ? gm.hFour : gm.aFour;
-    const oppB2B = oppRest === 0;
-
-    if (isB2B) {
-      score -= 12;
-      factors.push({
-        name: "Schedule",
-        impact: "negative",
-        detail: `${pl.team} on back-to-back — research shows 1-3 pt decline, especially for guards`,
-      });
-    } else if (rest >= 3) {
-      score += 8;
-      factors.push({
-        name: "Schedule",
-        impact: "positive",
-        detail: `${pl.team} has ${rest} days rest — fresh legs boost performance`,
-      });
-    } else {
-      factors.push({ name: "Schedule", impact: "neutral", detail: `${rest} days rest — no significant edge` });
-    }
-
-    if (isFour) {
-      score -= 8;
-      factors.push({
-        name: "Schedule",
-        impact: "negative",
-        detail: `${pl.team} on 4 games in 5 nights — severe fatigue, especially for guards`,
-      });
-    }
-
-    if (oppB2B && !isB2B) {
-      score += 6;
-      factors.push({
-        name: "Schedule",
-        impact: "positive",
-        detail: `Opponent ${opp} on B2B — ${pl.name} faces tired defense`,
-      });
-    }
-  }
-
-  // 2. Defense matchup (topendsports: "individual matchups when betting wing props")
-  if (rank <= 10) {
-    score -= 9;
-    factors.push({
-      name: "Defense",
-      impact: "negative",
-      detail: `Tough matchup vs ${opts.oppName || opp} (${ord(rank)} vs ${posFull(pl.posRaw)})`,
-    });
-  } else if (rank >= 21) {
-    score += 9;
-    factors.push({
-      name: "Defense",
-      impact: "positive",
-      detail: `Soft matchup vs ${opts.oppName || opp} (${ord(rank)} vs ${posFull(pl.posRaw)} — allows more than most)`,
-    });
-  } else {
-    factors.push({ name: "Defense", impact: "neutral", detail: `Average defense (${ord(rank)}) — no edge` });
-  }
-
-  // 3. EV / edge from sharp consensus
-  if (ev >= 0.08) {
-    score += 15;
-    factors.push({
-      name: "Sharp EV",
-      impact: "positive",
-      detail: `Strong edge +${(ev * 100).toFixed(1)}% — above 8% threshold`,
-    });
-  } else if (ev >= 0.03) {
-    score += 8;
-    factors.push({
-      name: "Sharp EV",
-      impact: "positive",
-      detail: `Moderate edge +${(ev * 100).toFixed(1)}% — above 3% threshold`,
-    });
-  } else if (ev > 0) {
-    score += 2;
-    factors.push({
-      name: "Sharp EV",
-      impact: "neutral",
-      detail: `Small edge +${(ev * 100).toFixed(1)}% — below 3% threshold, not playable`,
-    });
-  } else {
-    score -= 10;
-    factors.push({ name: "Sharp EV", impact: "negative", detail: "No edge or negative EV" });
-  }
-
-  // 4. Hit rate trend (topendsports: "minutes trends matter more than raw stats")
-  if (l10HitRate != null && seasonHitRate != null) {
-    if (l10HitRate > seasonHitRate + 0.1) {
-      score += 5;
-      factors.push({
-        name: "Trend",
-        impact: "positive",
-        detail: `Heating up — L10 (${(l10HitRate * 100).toFixed(0)}%) > season (${(seasonHitRate * 100).toFixed(0)}%)`,
-      });
-    } else if (l10HitRate < seasonHitRate - 0.1) {
-      score -= 5;
-      factors.push({
-        name: "Trend",
-        impact: "negative",
-        detail: `Cooling off — L10 (${(l10HitRate * 100).toFixed(0)}%) < season (${(seasonHitRate * 100).toFixed(0)}%)`,
-      });
-    } else {
-      factors.push({ name: "Trend", impact: "neutral", detail: "Steady — L10 matches season rate" });
-    }
-  }
-
-  // 5. Position fatigue (topendsports: "guards cover most distance, decline most on B2B")
-  if (gm) {
-    const isHome = pl.team === gm.home;
-    const rest = isHome ? gm.hRest : gm.aRest;
-    if (rest === 0 && pl.pos === "G") {
-      score -= 6;
-      factors.push({
-        name: "Fatigue",
-        impact: "negative",
-        detail: `${posFull(pl.posRaw)} on B2B — guards cover 5+ miles/game, highest fatigue impact`,
-      });
-    } else if (rest === 0 && pl.pos === "C") {
-      // Centers hold production steadier per the guide
-      factors.push({
-        name: "Fatigue",
-        impact: "neutral",
-        detail: `Center on B2B — per-minute production holds steadier, though minutes may drop`,
-      });
-    }
-  }
-
-  // 6. Injury impact (topendsports: "missing rotation pieces changes pace, defensive schemes, scoring distribution")
-  const teamInjuries = injuries[pl.team] || [];
-  const oppInjuries = injuries[opp] || [];
-  const teammatesOut = teamInjuries.filter((i) => i.status === "Out" || i.status === "Questionable");
-  const oppOut = oppInjuries.filter((i) => i.status === "Out" || i.status === "Questionable");
-
-  if (teammatesOut.length > 0) {
-    // Use rate spike: when teammates are out, usage spikes for remaining players
-    // This can help over props
-    score += 4;
-    factors.push({
-      name: "Injuries",
-      impact: "positive",
-      detail: `${teammatesOut.length} teammate(s) out/Questionable — usage spike for ${pl.name}, benefits Over`,
-    });
-  }
-  if (oppOut.length > 0) {
-    score += 3;
-    factors.push({
-      name: "Injuries",
-      impact: "positive",
-      detail: `${oppOut.length} opponent(s) out/Questionable — weaker defense for ${pl.name}`,
-    });
-  }
-
-  // 7. Pace context (topendsports: "pace is the single best predictor of total score")
-  if (gm) {
-    const tm = T[pl.team];
-    if (tm && tm.pace >= 100) {
-      score += 3;
-      factors.push({
-        name: "Pace",
-        impact: "positive",
-        detail: `${pl.team} plays fast (${tm.pace.toFixed(1)} poss/game) — more possessions = more stats`,
-      });
-    } else if (tm && tm.pace <= 98.5) {
-      score -= 3;
-      factors.push({
-        name: "Pace",
-        impact: "negative",
-        detail: `${pl.team} plays slow (${tm.pace.toFixed(1)} poss/game) — fewer stats opportunities`,
-      });
-    }
-  }
-
-  // Clamp to 1-100
-  score = Math.max(1, Math.min(100, score));
-
-  // Letter grade
-  let grade: BetRating["grade"] = "F";
-  if (score >= 80) grade = "A";
-  else if (score >= 65) grade = "B";
-  else if (score >= 50) grade = "C";
-  else if (score >= 35) grade = "D";
-
-  return { score, grade, factors };
-}
-
 export function clamp(x: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, x));
 }
@@ -965,35 +712,59 @@ export function restTxt(r: number): string {
       : r + (r === 1 ? " day" : " days") + " rest";
 }
 
-export function scheduleSpots(g: SlateGame) {
-  const out: { t: string; l: string }[] = [];
+/** A spot or quick bet: a heading plus separate jot-note ideas. */
+export type Spot = { t: string; ideas: string[] };
+
+export function scheduleSpots(g: SlateGame): Spot[] {
+  const out: Spot[] = [];
   const h = g.home,
     a = g.away;
   if (g.aRest === 0 && g.hRest >= 1)
     out.push({
       t: `${a} road B2B vs rested ${h}`,
-      l: `fade ${a} spread / team total U (about -2 to -3 pts)`,
+      ideas: [`Fade ${a} on the spread`, `${a} team total Under`, `Typical drop is about 2-3 pts`],
     });
   if (g.hRest >= 3 && g.aRest <= 2)
     out.push({
       t: `${h} ${g.hRest}+ days rest vs traveling ${a}`,
-      l: `back ${h} spread / 1H spread (+1 to 2 pts)`,
+      ideas: [`Back ${h} on the spread`, `${h} first-half spread`, `Rest edge is worth about 1-2 pts`],
     });
   if (g.hRest === 0 && g.aRest === 0)
     out.push({
       t: "Both teams on B2B",
-      l: "game total UNDER (slow pace, sloppy play)",
+      ideas: ["Game total Under", "Slow pace and sloppy play"],
     });
   if (g.hFour || g.aFour)
     out.push({
       t: `4 games in 5 nights: ${g.hFour ? h : ""}${g.hFour && g.aFour ? " & " : ""}${g.aFour ? a : ""}`,
-      l: "totals UNDER, fade tired team, Q4 props",
+      ideas: ["Totals Under", "Fade the tired team", "Q4 props"],
     });
   if (Math.abs(g.spread) <= 5)
     out.push({
       t: `Projected close game (spread ${g.spread > 0 ? "+" : ""}${g.spread})`,
-      l: "Q4 UNDER / live UNDER; star pts Over (starters play more in close games)",
+      ideas: ["Q4 Under or live Under", "Star points Over", "Starters play more minutes in close games"],
     });
+  return out;
+}
+
+export function quickBets(g: SlateGame): Spot[] {
+  const out: Spot[] = [];
+  const h = g.home,
+    a = g.away;
+  if (g.hRest === 0 && g.aRest >= 1)
+    out.push({ t: `Fade ${h}`, ideas: [`${a} on the spread`, "Game total Under", `${h} on a B2B vs rested ${a}`] });
+  if (g.aRest === 0 && g.hRest >= 1)
+    out.push({ t: `Fade ${a}`, ideas: [`${h} on the spread`, "Game total Under", `${a} on a B2B vs rested ${h}`] });
+  if (g.hRest === 0 && g.aRest === 0)
+    out.push({ t: "Both on B2B", ideas: ["Game total Under", "Tired legs", "Slow pace and sloppy play"] });
+  if (g.hFour || g.aFour)
+    out.push({ t: "Fatigue spot", ideas: ["Totals Under", "Fade the tired team", "4 games in 5 nights"] });
+  if (Math.abs(g.spread) <= 5)
+    out.push({ t: "Close game", ideas: ["Q4 Under or live Under", "Star props Over", "Starters play more minutes"] });
+  if (g.pace >= 100 && g.hRest >= 1 && g.aRest >= 1)
+    out.push({ t: "Fast and rested", ideas: ["Game total Over", "Both teams fresh and pushing pace"] });
+  if (g.pace <= 98.5 && (g.hRest === 0 || g.aRest === 0))
+    out.push({ t: "Slow and tired", ideas: ["Game total Under", "Slow pace meets fatigue"] });
   return out;
 }
 

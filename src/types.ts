@@ -52,7 +52,18 @@ export interface GameLog {
   reb: number;
   ast: number;
   fg3: number;
+  stl: number;
+  blk: number;
+  tov: number;
+  fga: number;
+  fta: number;
   pra: number;
+  pts_ast: number;
+  pts_reb: number;
+  reb_ast: number;
+  blk_stl: number;
+  dd: number;
+  td: number;
 }
 
 export interface SlateGame {
@@ -69,6 +80,7 @@ export interface SlateGame {
   time: string;
   model: boolean;
   dt?: string; // ISO datetime for filtering
+  date?: string; // ET calendar date (YYYY-MM-DD)
 }
 
 export interface ContextData {
@@ -96,7 +108,64 @@ export interface Prop {
   market: string;
   line: number;
   proj: number;
+  /** Retail sportsbooks you can actually bet at. */
   books: PropBook[];
+  /** Sharp / exchange books, used only to estimate the true probability (+EV spotting). */
+  sharp: PropBook[];
+  /** ET calendar date (YYYY-MM-DD) of the game. */
+  date: string;
+  /** index into SLATE of the game this prop belongs to */
+  gid: number;
+  /** opponent team abbreviation */
+  opp: string;
+  _analysis?: PropAnalysis;
+}
+
+export interface InjuryItem {
+  name: string;
+  side: "team" | "opp" | "self";
+  status: string;
+  /** rating-point shift: + favors the Over, - favors the Under; 0 for pure availability risk */
+  shift: number;
+  detail: string;
+}
+
+export interface InjuryImpact {
+  shift: number;
+  items: InjuryItem[];
+  /** the player's own availability */
+  self: "out" | "risk" | "none";
+}
+
+export interface PropAnalysis {
+  rank: number;
+  best: { book: string; side: "over" | "under"; line: number; odds: number; ev: number; p: number };
+  conf: "Strong" | "Lean" | "Pass";
+  noSharp: boolean;
+  consensus: { prob: number | null; booksUsed: { name: string; weight: number; prob: number; odds: number; line: number }[] };
+  injury: InjuryImpact;
+  rating: { score: number; grade: "A" | "B" | "C" | "D" | "F"; factors: { name: string; impact: "positive" | "negative" | "neutral"; detail: string }[] };
+}
+
+/** One saved pick, kept so past days can be reviewed and graded. */
+export interface PickRecord {
+  key: string; // date|player|market
+  date: string;
+  player: string;
+  team: string;
+  opp: string;
+  market: string;
+  line: number;
+  side: "over" | "under";
+  book: string;
+  odds: number;
+  ev: number;
+  grade: string;
+  score: number;
+  conf: string;
+  result: "pending" | "win" | "loss" | "push";
+  actual?: number;
+  ts: number;
 }
 
 export interface Injury {
@@ -155,6 +224,9 @@ export interface Bet {
   units: number;
   result: "pending" | "win" | "loss" | "push";
   note?: string;
+  /** Structured prop details so the bet can be graded automatically from box scores. */
+  pick?: { player: string; market: string; line: number; side: "over" | "under"; date: string };
+  actual?: number;
 }
 
 export type Markets =
@@ -198,7 +270,7 @@ export const MARKET_LABELS: Record<string, string> = {
 export const STATS_MARKETS: Markets[] = ["pts", "reb", "ast", "fg3", "stl", "blk", "tov"];
 
 /** Reading box-score column index for each stat. */
-export const STAT_IDX: Record<string, number> = { pts: 8, reb: 9, ast: 10, fg3: 11, stl: 12, blk: 13, tov: 15 };
+export const STAT_IDX: Record<string, number> = { pts: 8, reb: 9, ast: 10, fg3: 11, stl: 16, blk: 17, tov: 15 };
 
 /** Markets we can compute the player average for. */
 export const AVG_MARKETS: string[] = [
@@ -227,24 +299,27 @@ export const posGroup = (p: string): string =>
   p === "G" || p === "G-F" ? "G" : p === "C" || p === "C-F" ? "C" : "W";
 
 export const BOOKS = [
-  "DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN BET", "Fanatics",
+  "DraftKings", "FanDuel", "BetMGM", "Caesars", "theScore Bet", "Fanatics", "BetRivers", "Hard Rock Bet", "Bally Bet", "betPARX",
 ];
 
 /**
- * Sharp book weights for weighted-consensus EV calculation (sums to 100%).
- * Currently normalized for books available via predictionmarketapi.com.
- * When integrating additional APIs, add entries here and the consensusProb()
- * function will automatically include them.
+ * Relative sharp-book weights for the +EV consensus. These are the five books The Odds API
+ * carries (Pinnacle in the EU region, the rest in the US exchange region). consensusProb()
+ * renormalizes over whichever of them actually priced a given prop, so the weights always
+ * sum to 100% for that prop. Sharp books are never used to bet, only to estimate the true
+ * probability.
  */
 export const SHARP_BOOK_WEIGHTS: Record<string, number> = {
-  kalshi: 51.5,
-  polymarket: 24.25,
-  novig: 24.25,
+  pinnacle: 25,
+  kalshi: 17,
+  novig: 8,
+  polymarket: 8,
+  prophetx: 8,
 };
 
 /** Map short/normalized book names to their canonical label. */
 export const SHARP_BOOK_ALIAS: Record<string, string> = {
-  pinnacle: "Pinnacle (PS3838)",
+  pinnacle: "Pinnacle",
   draftkingspredictions: "DraftKings Predictions",
   kalshi: "Kalshi",
   bookmaker: "Bookmaker",
@@ -255,15 +330,19 @@ export const SHARP_BOOK_ALIAS: Record<string, string> = {
 };
 
 /** Weighted sharp consensus — which books contribute to the EV true-probability. */
-export const CONSENSUS_DESCRIPTION = "Sharp consensus (Kalshi 51.5%, Polymarket 24.25%, Novig 24.25%)";
+export const CONSENSUS_DESCRIPTION = "Sharp consensus (Pinnacle, Kalshi, Novig, Polymarket, ProphetX)";
 
 export const BOOK_URLS: Record<string, string> = {
   DraftKings: "https://sportsbook.draftkings.com",
   FanDuel: "https://sportsbook.fanduel.com",
   BetMGM: "https://sports.betmgm.com",
   Caesars: "https://sportsbook.caesars.com",
-  "ESPN BET": "https://espnbet.com",
+  "theScore Bet": "https://thescore.bet",
   Fanatics: "https://fanatics.com/sportsbook",
+  BetRivers: "https://www.betrivers.com",
+  "Hard Rock Bet": "https://www.hardrock.bet",
+  "Bally Bet": "https://ballybet.com",
+  betPARX: "https://www.betparx.com",
 };
 
 export const TEAM_LIST: TeamListEntry[] = [

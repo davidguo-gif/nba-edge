@@ -2,16 +2,35 @@
 
 import React, { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
-import { totalLean, scheduleSpots, restTxt, teamRank, ord, TIME_OPTIONS } from "@/lib/nba";
+import { totalLean, scheduleSpots, quickBets, restTxt, teamRank, ord } from "@/lib/nba";
+import type { Spot } from "@/lib/nba";
 import type { TeamData, SlateGame } from "@/types";
 
 const tierCls = (r: number) => (r <= 10 ? "ok" : r >= 21 ? "bad" : "");
 const paceWord = (p: number) => (p >= 100 ? "fast" : p <= 98.5 ? "slow" : "avg");
 
+function Notes({ items }: { items: Spot[] }) {
+  return (
+    <ul className="clean text-sm">
+      {items.map((s, i) => (
+        <li key={i} style={{ margin: "6px 0" }}>
+          <b>{s.t}</b>
+          <ul className="jot">
+            {s.ideas.map((idea, j) => (
+              <li key={j}>{idea}</li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function GameAnalysis({ g }: { g: SlateGame }) {
   const { state } = useNBA();
   const { T } = state;
   const spots = scheduleSpots(g);
+  const quick = quickBets(g);
   const tl = totalLean(g);
 
   const h = T[g.home];
@@ -82,13 +101,7 @@ function GameAnalysis({ g }: { g: SlateGame }) {
           <div style={{ marginTop: 8 }}>
             <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Situational spots</h4>
             {spots.length > 0 ? (
-              <ul className="clean text-sm">
-                {spots.map((s, i) => (
-                  <li key={i} className="row">
-                    <span><b>{s.t}</b> → {s.l}</span>
-                  </li>
-                ))}
-              </ul>
+              <Notes items={spots} />
             ) : (
               <div className="text-xs note">No rest or fatigue edge in this game.</div>
             )}
@@ -96,29 +109,7 @@ function GameAnalysis({ g }: { g: SlateGame }) {
 
           <div style={{ marginTop: 8 }}>
             <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Quick bets</h4>
-            <ul className="clean text-sm">
-              {(g.hRest === 0 && g.aRest >= 1) && (
-                <li className="row"><span><b>Fade {g.home}:</b> spread on {g.away}, game total Under — {g.home} on B2B vs rested {g.away}</span></li>
-              )}
-              {(g.aRest === 0 && g.hRest >= 1) && (
-                <li className="row"><span><b>Fade {g.away}:</b> spread on {g.home}, game total Under — {g.away} on B2B vs rested {g.home}</span></li>
-              )}
-              {(g.hRest === 0 && g.aRest === 0) && (
-                <li className="row"><span><b>Both B2B:</b> game total Under — tired legs, slow pace, sloppy play</span></li>
-              )}
-              {(g.hFour || g.aFour) && (
-                <li className="row"><span><b>Fatigue spot:</b> Under on totals, fade tired team — 4 games in 5 nights</span></li>
-              )}
-              {(Math.abs(g.spread) <= 5) && (
-                <li className="row"><span><b>Close game:</b> Q4 Under / live Under, star props Over (starters play more minutes)</span></li>
-              )}
-              {(g.pace >= 100 && g.hRest >= 1 && g.aRest >= 1) && (
-                <li className="row"><span><b>Fast + rested:</b> game total Over — both teams fresh and pushing pace</span></li>
-              )}
-              {(g.pace <= 98.5 && (g.hRest === 0 || g.aRest === 0)) && (
-                <li className="row"><span><b>Slow + tired:</b> game total Under — slow pace meets fatigue</span></li>
-              )}
-            </ul>
+            {quick.length > 0 ? <Notes items={quick} /> : <div className="text-xs note">No quick bets for this game.</div>}
           </div>
         </div>
       </td>
@@ -127,18 +118,12 @@ function GameAnalysis({ g }: { g: SlateGame }) {
 }
 
 export function SlateTab() {
-  const { state, focus, clearFocus, timeHorizon } = useNBA();
+  const { state, focus, clearFocus, selectedDate } = useNBA();
   const { SLATE, T } = state;
   const [hl, setHl] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  const nowMs = Date.now();
-  const cutoff = timeHorizon === 0 ? Infinity : nowMs + timeHorizon * 3600e3;
-
-  const filteredSlate = SLATE.filter((g) => {
-    if (!g.dt) return true;
-    return new Date(g.dt).getTime() <= cutoff;
-  });
+  const filteredSlate = SLATE.filter((g) => !g.date || g.date === selectedDate);
 
   useEffect(() => {
     if (!focus || focus.tab !== "slate" || focus.gameId == null) return;
@@ -160,12 +145,12 @@ export function SlateTab() {
     <div>
       <h2>Slate</h2>
       <p className="sub">Our projections (not sportsbook lines). Rankings: 1 = best of 30 teams. Click a game for full analysis.</p>
-      {SLATE.length === 0 ? (
-        <p className="note">No games scheduled. Check back later.</p>
+      {filteredSlate.length === 0 ? (
+        <p className="note">No games scheduled for this day. Past days keep their picks and results in the Props tab.</p>
       ) : (
         <>
           <div className="filters">
-            <span className="note">{filteredSlate.length} of {SLATE.length} game{SLATE.length !== 1 ? "s" : ""}</span>
+            <span className="note">{filteredSlate.length} game{filteredSlate.length !== 1 ? "s" : ""}</span>
           </div>
           <div className="tbl-wrap">
             <table>

@@ -6,7 +6,7 @@ import { decOdds } from "@/lib/nba";
 import { fmtOdds } from "@/lib/odds";
 import { OddsInput } from "./OddsInput";
 import { NumInput } from "./NumInput";
-import { BOOK_URLS } from "@/types";
+import { BOOK_URLS, BOOKS } from "@/types";
 
 type DateFilter = "today" | "3d" | "week" | "month" | "season" | "all";
 
@@ -78,7 +78,7 @@ export function TrackerTab() {
   const [book, setBook] = useState("DraftKings");
   const [odds, setOdds] = useState(-110);
   const [units, setUnits] = useState(1);
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
   const unit = (bankroll * unitPct) / 100;
   const profit = (b: (typeof bets)[0]) =>
@@ -164,7 +164,7 @@ export function TrackerTab() {
           <label>
             Book
             <select value={book} onChange={(e) => setBook(e.target.value)}>
-              {(["DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN BET", "Fanatics"] as const).map((b) => (
+              {BOOKS.map((b) => (
                 <option key={b}>{b}</option>
               ))}
             </select>
@@ -219,6 +219,9 @@ export function TrackerTab() {
                 <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(b.date)}</td>
                 <td>
                   {b.desc}
+                  {b.actual != null && (
+                    <span className="note"> · actual {b.actual}</span>
+                  )}
                   {b.units > 3 && (
                     <span className="tag bad" style={{ marginLeft: 4 }}>
                       over 3u
@@ -247,7 +250,7 @@ export function TrackerTab() {
                     }
                   >
                     {["pending", "win", "loss", "push"].map((r) => (
-                      <option key={r}>{r}</option>
+                      <option key={r} value={r}>{r === "win" ? "win (hit)" : r === "loss" ? "loss (miss)" : r}</option>
                     ))}
                   </select>
                 </td>

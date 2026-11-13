@@ -1,8 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import type { Player, Bet, Injury, ParlayLeg } from "@/types";
-import { createState, fetchNBAData, processData, clearCache } from "@/lib/nba";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import type { Bet, ParlayLeg, PickRecord } from "@/types";
+import { createState, fetchNBAData, processData, clearCache, etDate, todayET, normName } from "@/lib/nba";
+import { annotateProps, gradeAgainstLog } from "@/lib/analysis";
 import type { AppState, OddsPayload } from "@/lib/nba";
 import { store, save } from "@/lib/store";
 import type { OddsFormat } from "@/lib/odds";
@@ -26,7 +27,7 @@ interface NBAContextType {
   updateLegOdds: (id: string, odds: number) => void;
   removeLeg: (id: string) => void;
   bets: Bet[];
-  addBet: (desc: string, book: string, odds: number, units: number, note?: string) => void;
+  addBet: (desc: string, book: string, odds: number, units: number, note?: string, pick?: Bet["pick"]) => void;
   updateBetResult: (id: number | string, result: "pending" | "win" | "loss" | "push") => void;
   updateBetNote: (id: number | string, note: string) => void;
   removeBet: (id: number | string) => void;
@@ -40,8 +41,10 @@ interface NBAContextType {
   setSelTeam: (t: string | null) => void;
   selPlayer: number | null;
   setSelPlayer: (p: number | null) => void;
-  timeHorizon: number;
-  setTimeHorizon: (h: number) => void;
+  selectedDate: string;
+  setSelectedDate: (d: string) => void;
+  dateOptions: { value: string; label: string }[];
+  history: PickRecord[];
 }
 
 const NBAContext = createContext<NBAContextType | null>(null);
@@ -61,8 +64,8 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
   const [focus, setFocus] = useState<NBAContextType["focus"]>(null);
   const clearFocus = useCallback(() => setFocus(null), []);
   const [propDetail, setPropDetail] = useState<number | null>(null);
-  const [timeHorizon, setTimeHorizonRaw] = useState(24);
-  const setTimeHorizon = useCallback((h: number) => { setTimeHorizonRaw(h); save("timeHorizon", h); }, []);
+  const [selectedDate, setSelectedDate] = useState(todayET);
+  const [history, setHistory] = useState<PickRecord[]>([]);
   // jump from a parlay leg to the prop (Props tab) or game (Slate tab) it came from
   const goToLeg = useCallback((leg: ParlayLeg) => {
     const isProp = leg.kind === "prop";
@@ -125,6 +128,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     const data = await fetchNBAData();
     const s = createState();
     processData(data, s, odds);
+    annotateProps(s);
     setState(s);
   }, []);
 
@@ -136,6 +140,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
       const data = await fetchNBAData();
       const s = createState();
       processData(data, s, loadOdds());
+      annotateProps(s);
       setState(s);
     } catch (e: any) {
       setError(e.message || "Failed to load data");
@@ -151,11 +156,103 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     setOddsFormatState(store<OddsFormat>("oddsfmt", "decimal"));
     setBankroll(store<number>("bank", 1000));
     setUnitPct(store<number>("unitpct", 1));
-    setTimeHorizonRaw(store<number>("timeHorizon", 24));
+    setHistory(store<PickRecord[]>("history", []));
   }, [refresh]);
 
+  // Save every playable pick (+EV vs the sharp consensus) before tip-off so past days can be reviewed.
+  useEffect(() => {
+    const now = Date.now();
+    const fresh: PickRecord[] = [];
+    state.PROPS.forEach((p) => {
+      const a = p._analysis;
+      const pl = state.PLAYERS[p.pid];
+      const gm = state.SLATE[p.gid];
+      if (!a || !pl || !gm || a.noSharp || a.best.ev < 0.03 || /^q\d_/.test(p.market)) return;
+      if (gm.dt && new Date(gm.dt).getTime() <= now) return; // already tipped off: keep the saved pre-game pick
+      fresh.push({
+        key: `${p.date}|${normName(pl.name)}|${p.market}`,
+        date: p.date,
+        player: pl.name,
+        team: pl.team,
+        opp: p.opp,
+        market: p.market,
+        line: a.best.line,
+        side: a.best.side,
+        book: a.best.book,
+        odds: a.best.odds,
+        ev: a.best.ev,
+        grade: a.rating.grade,
+        score: a.rating.score,
+        conf: a.conf,
+        result: "pending",
+        ts: now,
+      });
+    });
+    if (!fresh.length) return;
+    setHistory((cur) => {
+      const map = new Map(cur.map((r) => [r.key, r]));
+      fresh.forEach((r) => {
+        const old = map.get(r.key);
+        if (!old || old.result === "pending") map.set(r.key, r);
+      });
+      const next = [...map.values()];
+      save("history", next);
+      return next;
+    });
+  }, [state]);
+
+  // Grade saved picks and tracked prop bets from the box scores once the game is in the data.
+  useEffect(() => {
+    if (!state.PLAYERS.length) return;
+    const byKey = new Map(state.PLAYERS.map((p) => [`${normName(p.name)}|${p.team}`, p]));
+    const byName = new Map(state.PLAYERS.map((p) => [normName(p.name), p]));
+    setHistory((cur) => {
+      let changed = false;
+      const next = cur.map((r) => {
+        if (r.result !== "pending") return r;
+        const g = gradeAgainstLog(byKey.get(`${normName(r.player)}|${r.team}`), r.date, r.market, r.line, r.side);
+        if (!g) return r;
+        changed = true;
+        return { ...r, result: g.result, actual: g.actual };
+      });
+      if (changed) save("history", next);
+      return changed ? next : cur;
+    });
+    setBets((cur) => {
+      let changed = false;
+      const next = cur.map((b) => {
+        if (b.result !== "pending" || !b.pick) return b;
+        const g = gradeAgainstLog(byName.get(normName(b.pick.player)), b.pick.date, b.pick.market, b.pick.line, b.pick.side);
+        if (!g) return b;
+        changed = true;
+        return { ...b, result: g.result, actual: g.actual };
+      });
+      if (changed) save("bets", next);
+      return changed ? next : cur;
+    });
+  }, [state.PLAYERS, history, bets]);
+
+  const dateOptions = useMemo(() => {
+    const today = todayET();
+    const tomorrow = etDate(Date.now() + 864e5);
+    const dates = new Set<string>([today]);
+    state.SLATE.forEach((g) => g.date && dates.add(g.date));
+    state.PROPS.forEach((p) => dates.add(p.date));
+    history.forEach((r) => dates.add(r.date));
+    return [...dates]
+      .sort((a, b) => (a < b ? 1 : -1))
+      .map((d) => {
+        const pretty = new Date(d + "T12:00:00Z").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+        if (d >= today) return { value: d, label: `${d === today ? "Today" : d === tomorrow ? "Tomorrow" : "Upcoming"} · ${pretty}` };
+        const day = history.filter((r) => r.date === d);
+        const w = day.filter((r) => r.result === "win").length;
+        const l = day.filter((r) => r.result === "loss").length;
+        return { value: d, label: `${pretty} · ${day.length ? `${w}-${l}` : "no picks saved"}` };
+      });
+  }, [state.SLATE, state.PROPS, history]);
+
   const addBet = useCallback(
-    (desc: string, book: string, odds: number, units: number, note?: string) => {
+    (desc: string, book: string, odds: number, units: number, note?: string, pick?: Bet["pick"]) => {
       const newBet: Bet = {
         id: Date.now() + Math.random(),
         date: new Date().toISOString(),
@@ -165,6 +262,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         units,
         result: "pending",
         note,
+        pick,
       };
       const next = [...bets, newBet];
       setBets(next);
@@ -226,8 +324,10 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         updateBetResult,
         updateBetNote,
         removeBet,
-        timeHorizon,
-        setTimeHorizon,
+        selectedDate,
+        setSelectedDate,
+        dateOptions,
+        history,
         bankroll,
         setBankroll: (v) => { setBankroll(v); save("bank", v); },
         unitPct,

@@ -92,9 +92,9 @@ def game_rows(season, min_date=None):
         home = 1 if "vs." in m else 0
         pid = r["PLAYER_ID"]
         names[pid] = r["PLAYER_NAME"]
-        # [0 id, 1 gameId, 2 date, 3 team, 4 opp, 5 home, 6 playerId, 7 min, 8 pts, 9 reb, 10 ast, 11 fg3, 12 fga, 13 fta, 14 oreb, 15 tov]
+        # [0 id, 1 gameId, 2 date, 3 team, 4 opp, 5 home, 6 playerId, 7 min, 8 pts, 9 reb, 10 ast, 11 fg3, 12 fga, 13 fta, 14 oreb, 15 tov, 16 stl, 17 blk]
         rows.append([f"{r['GAME_ID']}_{pid}", r["GAME_ID"], date, r["TEAM_ABBREVIATION"], m[-1], home, pid, float(r["MIN"]),
-                     r["PTS"] or 0, r["REB"] or 0, r["AST"] or 0, r["FG3M"] or 0, r["FGA"] or 0, r["FTA"] or 0, r["OREB"] or 0, r["TOV"] or 0])
+                     r["PTS"] or 0, r["REB"] or 0, r["AST"] or 0, r["FG3M"] or 0, r["FGA"] or 0, r["FTA"] or 0, r["OREB"] or 0, r["TOV"] or 0, r["STL"] or 0, r["BLK"] or 0])
     time.sleep(1)
     return rows, names
 

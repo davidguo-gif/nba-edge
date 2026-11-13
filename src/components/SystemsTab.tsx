@@ -34,7 +34,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Does overtime count?",
-    "Yes for moneylines, spreads and full-game totals at most books. Some props and quarter bets exclude OT; check house rules.",
+    "Yes for moneylines, spreads and full-game totals at most books. Some props and quarter bets exclude OT, so check house rules.",
   ],
   [
     "What is ATS?",
@@ -111,11 +111,11 @@ export function SystemsTab() {
     if (b2b === "one") {
       if (loc === "road" && pace !== "fast")
         return ["Slight UNDER", "Road fatigue suggests modest scoring suppression."];
-      return ["No strong lean", "Mixed factors; consider spreads or props instead."];
+      return ["No strong lean", "Mixed factors. Consider spreads or props instead."];
     }
     if (pace === "fast") return ["Lean OVER", "Fresh teams with fast pace create more possessions."];
     if (pace === "slow") return ["Lean UNDER", "Slow defensive teams suppress scoring."];
-    return ["No strong lean", "Mixed factors; pass or look elsewhere."];
+    return ["No strong lean", "Mixed factors. Pass or look elsewhere."];
   };
   const tr = totalResult();
 
@@ -160,6 +160,18 @@ export function SystemsTab() {
         <div className="card stat">
           <b>-1.27</b>
           <span>Q1 to Q4 fatigue effect size</span>
+        </div>
+        <div className="card stat">
+          <b>1-3 pts</b>
+          <span>road team B2B decline</span>
+        </div>
+        <div className="card stat">
+          <b>48-72 hrs</b>
+          <span>recovery needed</span>
+        </div>
+        <div className="card stat">
+          <b>~58%</b>
+          <span>league average TS%</span>
         </div>
       </div>
 
@@ -255,6 +267,28 @@ export function SystemsTab() {
         Expected Points = (Team A Pace x Team A Efficiency + Team B Pace x Team B Efficiency) / 2. Pace is the best predictor of total score. Elite offenses score 115+ per 100 possessions.
       </div>
 
+      <h3>Totals situations</h3>
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Situation</th><th>Lean</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Both teams on B2B</td><td>Under</td></tr>
+            <tr><td>One team on B2B</td><td>Neutral to slight Under</td></tr>
+            <tr><td>Both teams 3+ days rest</td><td>Slight Over</td></tr>
+            <tr><td>4 games in 5 nights</td><td>Strong Under</td></tr>
+            <tr><td>Fast vs fast pace</td><td>Over</td></tr>
+            <tr><td>Slow or defensive vs slow</td><td>Under</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul className="jot" style={{ marginTop: 6 }}>
+        <li>1H Overs can have value: fresh legs and no adjustments yet</li>
+        <li>Close Q4 games trend Under</li>
+        <li>Avoid totals in projected blowouts</li>
+      </ul>
+
       <h3>Schedule spots</h3>
       <div className="tbl-wrap">
         <table>
@@ -296,13 +330,48 @@ export function SystemsTab() {
             <li><b>Fade road team:</b> close game, road B2B vs rested home</li>
             <li><b>Star props Over:</b> projected close game, star 32+ MPG</li>
           </ul>
+          <ul className="jot" style={{ marginTop: 6 }}>
+            <li>Pace slows and efficiency drops in close games</li>
+            <li>Rotations shorten, so stars get more touches</li>
+            <li>Home court advantage grows in close games</li>
+          </ul>
         </div>
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Props by position</h3>
-          <ul className="clean">
-            <li><b>Guards</b> run 5+ miles: B2B scoring/assist unders</li>
-            <li><b>Wings</b> are matchup-dependent</li>
-            <li><b>Centers</b> hold per-minute output: rebounding props OK on B2B</li>
+          <ul className="jot">
+            <li><b>Guards</b> run 5+ miles a game</li>
+            <li>B2B scoring and assist Unders</li>
+            <li><b>Wings</b> are matchup-driven more than fatigue-driven</li>
+            <li><b>Centers</b> hold per-minute output</li>
+            <li>Rebounding props are OK on a B2B, but watch minutes</li>
+          </ul>
+        </div>
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Player prop checks</h3>
+          <ul className="jot">
+            <li>Minutes trend matters more than the raw average</li>
+            <li>Usage of 25%+ means more variance and more opportunity</li>
+            <li>Injured teammates spike usage</li>
+            <li>Check home/road splits</li>
+            <li>Check the player&apos;s own B2B history</li>
+            <li>Shop lines across books, it can add 5-10% to your edge</li>
+            <li>TS% = PTS / (2 x (FGA + 0.44 x FTA))</li>
+          </ul>
+        </div>
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Live betting</h3>
+          <b className="text-sm">Good spots</b>
+          <ul className="jot">
+            <li>Quality team trailing because the opponent is shooting unsustainably hot</li>
+            <li>Star in foul trouble or a minor injury where the market over- or under-reacts</li>
+            <li>Q4 Unders in close games</li>
+            <li>Post-timeout adjustments by the favorite</li>
+          </ul>
+          <b className="text-sm">Rules</b>
+          <ul className="jot">
+            <li>Pre-set your trigger scenarios</li>
+            <li>Only bet live if you are watching the game</li>
+            <li>Use 50-75% of your normal unit</li>
           </ul>
         </div>
         <div className="card">
@@ -318,9 +387,12 @@ export function SystemsTab() {
           <h3 style={{ marginTop: 0 }}>Bankroll</h3>
           <ul className="clean">
             <li>Start with 50-100 units</li>
-            <li>Never more than 3% on one game; most bets 1-2%</li>
+            <li>Never more than 3% on one game</li>
+            <li>Most bets should be 1-2%</li>
             <li>Flat 1-2u, confidence 1-3u, or 25-50% Kelly</li>
-            <li>Live bets: 50-75% of normal unit; pre-set your spots</li>
+            <li>Live bets: 50-75% of a normal unit</li>
+            <li>Pre-set your live spots</li>
+            <li>Keep betting funds separate from living money</li>
           </ul>
         </div>
         <div className="card">
@@ -340,6 +412,15 @@ export function SystemsTab() {
           <p className="note" style={{ marginTop: 4 }}>{a}</p>
         </details>
       ))}
+      <h3>Glossary</h3>
+      <ul className="jot">
+        <li><b>ATS:</b> against the spread, 30-20 ATS means covered 60%</li>
+        <li><b>B2B:</b> back-to-back games on consecutive days</li>
+        <li><b>SGP:</b> same-game parlay</li>
+        <li><b>OT:</b> counts for ML, spread and totals, but many props and quarter bets exclude it</li>
+        <li><b>Unit:</b> your standard bet size</li>
+        <li><b>Kelly:</b> (bp - q) / b, use only 25-50% fractional Kelly</li>
+      </ul>
       <p className="note">
         Source:{" "}
         <a href="https://www.topendsports.com/betting-guides/sport-specific/nba/strategy.htm" target="_blank" rel="noopener">

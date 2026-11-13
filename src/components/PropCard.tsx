@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
-import { BOOK_URLS, MARKET_NAMES, MARKET_LABELS, type PropBook, type Player, type SlateGame } from "@/types";
-import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds, type BetRating } from "@/lib/nba";
-import { bestPrice, bestPriceAtLine, propLeg } from "@/lib/parlay";
+import { BOOK_URLS, MARKET_NAMES, MARKET_LABELS, type PropBook, type Player, type SlateGame, type PropAnalysis } from "@/types";
+import { windows, record, defExplain, prevSeasonLabel, posFull, posGroupLabel, ord, decOdds } from "@/lib/nba";
+import { bestPriceAtLine, propLeg } from "@/lib/parlay";
+import { sideHits, type SideHit } from "@/lib/analysis";
 import { fmtOdds } from "@/lib/odds";
 
 const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);
+function Hit({ h }: { h: SideHit }) {
+  if (!h.n) return <td className="hr"><span className="note">-</span></td>;
+  const cls = h.pct! >= 0.6 ? "good" : h.pct! <= 0.4 ? "bad" : "mid";
+  return (
+    <td className="hr">
+      <span className={`hr-chip ${cls}`}>{Math.round(h.pct! * 100)}%</span>
+      <div className="note">{h.hit}/{h.n}</div>
+    </td>
+  );
+}
+const gradeCls = (g: string) => (g === "A" || g === "B" ? "ok" : g === "D" || g === "F" ? "bad" : "warn");
 
 export function PropCardRow({
   p,
@@ -20,19 +31,17 @@ export function PropCardRow({
   p: any;
   pl: Player;
   gm: SlateGame | null;
-  a: any;
+  a: PropAnalysis;
   open: boolean;
   onToggle: () => void;
 }) {
-  const { state, addBet, addLeg, oddsFormat, setPropDetail, setActiveTab } = useNBA();
+  const { state, addBet, addLeg, oddsFormat, setPropDetail } = useNBA();
   const fo = (o: number) => fmtOdds(o, oddsFormat);
 
-  const c = state.CTX[pl.team];
-  const opp: string = c ? c.opp : "";
+  const opp: string = p.opp;
   const oppName = opp ? state.T[opp]?.name || opp : "";
   const w = windows(pl, state.seasonStart);
   const h2h = opp ? pl.log.filter((g) => g.opp === opp) : [];
-  const curLabel = state.season;
   const prevLabel = prevSeasonLabel(state.season);
 
   const over = bestPriceAtLine(p.books, "over", p.line);
@@ -42,97 +51,106 @@ export function PropCardRow({
   const rPrev = record(w.prev, p.market, p.line);
   const rH2H = record(h2h, p.market, p.line);
 
-  const edgeOk = a.best.ev >= 0.03;
-  const edgePct = edgeOk ? `${(a.best.ev * 100).toFixed(1)}%` : "";
-  const pickLabel = edgeOk
-    ? `${a.best.side === "over" ? "O" : "U"} ${a.best.line}`
-    : "—";
-  const confTag =
-    a.conf === "Strong" ? "tag ok" : a.conf === "Lean" ? "tag warn" : "tag";
-  const confStyle = a.conf === "Pass" ? { background: "#1e293b", color: "#94a3b8" } : undefined;
+  const edgeOk = !a.noSharp && a.best.ev >= 0.03;
+  const pickLabel = edgeOk ? `${a.best.side === "over" ? "O" : "U"} ${a.best.line}` : "—";
+  const confCls = a.conf === "Strong" ? "tag ok" : a.conf === "Lean" ? "tag warn" : "tag";
   const d = defExplain(a.rank, pl.pos, p.market);
   const gLabel = gm ? `${pl.team === gm.home ? "vs" : "@"} ${pl.team === gm.home ? gm.away : gm.home}` : pl.team;
+  const sharpNames = a.consensus.booksUsed.map((b) => b.name).join(", ");
+  const inj = a.injury;
+  const injFlag = inj.self === "out" ? "OUT" : inj.self === "risk" ? "RISK" : inj.items.some((i) => i.shift !== 0) ? "INJ" : "";
 
-  const addToParlay = (side: "over" | "under") => {
-    addLeg(propLeg(p, pl, gm, side));
-  };
+  const hits = sideHits(pl, state, p, a);
+  const diff = p.proj != null && p.proj > 0 ? p.proj - p.line : null;
+
+  const pick = (side: "over" | "under") => ({ player: pl.name, market: p.market, line: side === "over" ? over.line : under.line, side, date: p.date });
 
   return (
     <>
-      <tr onClick={onToggle} style={{ cursor: "pointer" }}>
+      <tr id={`prop-row-${p.id}`} onClick={onToggle} style={{ cursor: "pointer" }}>
         <td>
           <b>{pl.name}</b>
-          <div className="text-xs note">{pl.team} · {posFull(pl.posRaw)} · <span className="tag" style={{fontSize:9,padding:'0 4px',background:'#1e293b',color:'#94a3b8',verticalAlign:'middle'}}>{posGroupLabel(pl.pos)}</span></div>
+          {injFlag && <span className={`tag ${inj.self === "out" ? "bad" : "warn"}`} style={{ marginLeft: 6 }} title="Injury report affects this prop">{injFlag}</span>}
+          <div className="note">{pl.team} · {posFull(pl.posRaw)} · {posGroupLabel(pl.pos)}</div>
         </td>
         <td>
           {gLabel}
-          {gm && <div className="text-xs note">{gm.time}</div>}
+          {gm && <div className="note">{gm.time}</div>}
         </td>
         <td>{MARKET_NAMES[p.market] || p.market}</td>
-        <td className="num">{p.line}</td>
         <td>
-          {pickLabel}
-          {edgePct && <div className="text-xs" style={{ color: "var(--green)" }}>{edgePct} edge</div>}
-          {!edgePct && <div className="text-xs note">—</div>}
+          {edgeOk ? (
+            <>
+              <span className={`pickbtn ${a.best.side}`}>{a.best.side === "over" ? "O" : "U"} {a.best.line}</span>
+              <div className="note">{fo(a.best.odds)} · {a.best.book}</div>
+            </>
+          ) : (
+            <>
+              <span className="note">{a.noSharp ? "No sharp line" : "No edge"}</span>
+              <div className="note">line {p.line}</div>
+            </>
+          )}
         </td>
-        <td>
-          L10 <b>{r10.o}/{r10.n}</b>
-          <div className="text-xs note">szn {rc.o}/{rc.n}</div>
+        <td className="num">
+          {p.proj != null && p.proj > 0 ? <b>{p.proj}</b> : <span className="note">-</span>}
+          {diff != null && <div className={`note ${diff > 0 ? "ok" : diff < 0 ? "bad" : ""}`}>{diff > 0 ? "+" : ""}{diff.toFixed(1)} vs line</div>}
+        </td>
+        <td className="num">
+          {edgeOk ? <b className="ok">+{(a.best.ev * 100).toFixed(1)}%</b> : <span className="note">-</span>}
+          <div><span className={confCls}>{a.conf}</span></div>
+        </td>
+        <td className="num">
+          <span className={`tag ${gradeCls(a.rating.grade)}`}>{a.rating.grade}</span>
+          <div className="note">{a.rating.score}</div>
         </td>
         <td className="num">
           <span className={d.tone}>{ord(a.rank)}</span>
-          <div className="text-xs note">{a.rank >= 21 ? "soft" : a.rank <= 10 ? "tough" : "avg"}</div>
+          <div className="note">{a.rank >= 21 ? "soft" : a.rank <= 10 ? "tough" : "avg"}</div>
         </td>
-        <td>
-          <span className={confTag} style={confStyle}>{a.conf}</span>
-        </td>
-        <td className="num">
-          {a.rating && (
-            <span className={`tag ${a.rating.grade === "A" || a.rating.grade === "B" ? "ok" : a.rating.grade === "D" || a.rating.grade === "F" ? "bad" : "warn"}`}>
-              {a.rating.grade}
-            </span>
-          )}
-          <div className="text-xs note">{a.rating ? a.rating.score : "—"}</div>
-        </td>
+        <Hit h={hits.l5} />
+        <Hit h={hits.l10} />
+        <Hit h={hits.l15} />
+        <Hit h={hits.szn} />
+        <Hit h={hits.h2h} />
       </tr>
       {open && (
         <tr className="expand-row">
-          <td colSpan={9} style={{ padding: 0, borderBottom: "2px solid var(--blue)" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ padding: "12px 16px", cursor: "default", background: "rgba(59,130,246,0.04)" }}>
-              {/* Analysis notes — clean, concise */}
+          <td colSpan={13} style={{ padding: 0 }}>
+            <div className="expand" onClick={(e) => e.stopPropagation()}>
               <h3 style={{ marginTop: 0, marginBottom: 8 }}>Analysis</h3>
               <ul className="clean text-sm" style={{ marginBottom: 8 }}>
                 <li className="row">
-                  <b>Edge:</b> {edgeOk
-                    ? `+${(a.best.ev * 100).toFixed(1)}% — above 3% threshold, playable (sharp: ${a.consensus?.booksUsed?.filter((b:any) => b.name !== "avg").map((b:any) => b.name).join(", ") || "consensus"})`
-                    : a.best.ev > 0
-                      ? `+${(a.best.ev * 100).toFixed(1)}% — below 3% threshold (sharp: ${a.consensus?.booksUsed?.filter((b:any) => b.name !== "avg").map((b:any) => b.name).join(", ") || "consensus"})`
-                      : "No edge found"}
+                  <b>Edge:</b>{" "}
+                  {a.noSharp
+                    ? "No sharp book (Pinnacle, Kalshi, Novig, Polymarket, ProphetX) has priced this exact line, so +EV can't be measured. Treat it as unrated."
+                    : a.best.ev >= 0.03
+                      ? `+${(a.best.ev * 100).toFixed(1)}% — playable (sharp: ${sharpNames})`
+                      : a.best.ev > 0
+                        ? `+${(a.best.ev * 100).toFixed(1)}% — below the 3% threshold (sharp: ${sharpNames})`
+                        : `No positive EV at any book (sharp: ${sharpNames})`}
                 </li>
+                {!a.noSharp && (
+                  <li className="row">
+                    <b>Best bet:</b> <b>{a.best.side === "over" ? "OVER" : "UNDER"} {a.best.line}</b> @ {a.best.book} ({fo(a.best.odds)}) — sharp true probability {Math.round(a.best.p * 100)}% vs {(100 / decOdds(a.best.odds)).toFixed(0)}% implied by the price
+                  </li>
+                )}
                 <li className="row">
-                  <b>Pick:</b> {edgeOk ? (
-                    <><b>{a.best.side === "over" ? "OVER" : "UNDER"} {a.best.line}</b> @ {a.best.book} ({fo(a.best.odds)}) — {Math.round(a.best.p * 100)}% hit vs {(1 / decOdds(a.best.odds) * 100).toFixed(0)}% implied</>
-                  ) : <span className="note">No edge: prices match true hit rate</span>}
-                </li>
-                <li className="row">
-                  <b>Hit rate:</b> L10 <b>{r10.o}/{r10.n}</b> ({pct(r10.pct)}) · szn <b>{rc.o}/{rc.n}</b> ({pct(rc.pct)}) · prev szn <b>{rPrev.o}/{rPrev.n}</b> ({pct(rPrev.pct)})
+                  <b>Hit rate:</b> L10 <b>{r10.o}/{r10.n}</b> ({pct(r10.pct)}) · szn <b>{rc.o}/{rc.n}</b> ({pct(rc.pct)}) · {prevLabel} <b>{rPrev.o}/{rPrev.n}</b> ({pct(rPrev.pct)})
                   {rH2H.n > 0 && <> · H2H <b>{rH2H.o}/{rH2H.n}</b> ({pct(rH2H.pct)})</>}
                 </li>
                 <li className="row">
                   <b>Defense:</b> {oppName || opp} ranks <b>{ord(a.rank)}</b> vs {posFull(pl.posRaw)} in {MARKET_NAMES[p.market]} — {d.effect}
                 </li>
-                {a.rating && (
-                  <li className="row" style={{ marginTop: 6 }}>
-                    <b>Rating:</b> <span className={`tag ${a.rating.grade === "A" || a.rating.grade === "B" ? "ok" : a.rating.grade === "D" || a.rating.grade === "F" ? "bad" : "warn"}`}>{a.rating.grade}</span> ({a.rating.score}/100)
-                    <ul className="clean text-xs" style={{ marginTop: 2 }}>
-                      {a.rating.factors.map((f: any, fi: number) => (
-                        <li key={fi} className="row" style={{ fontSize: 11, color: f.impact === "positive" ? "var(--green)" : f.impact === "negative" ? "var(--red)" : "var(--mut)" }}>
-                          <b>{f.name}:</b> {f.detail}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                )}
+                <li className="row" style={{ marginTop: 6 }}>
+                  <b>Rating:</b> <span className={`tag ${gradeCls(a.rating.grade)}`}>{a.rating.grade}</span> ({a.rating.score}/100) for the {a.best.side === "over" ? "Over" : "Under"}
+                  <ul className="clean text-xs" style={{ marginTop: 2 }}>
+                    {a.rating.factors.map((f, fi) => (
+                      <li key={fi} className="row" style={{ fontSize: 11, color: f.impact === "positive" ? "var(--green)" : f.impact === "negative" ? "var(--red)" : "var(--mut)" }}>
+                        <b>{f.name}:</b> {f.detail}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
                 {p.proj != null && (
                   <li className="row">
                     <b>Avg:</b> {p.proj} {MARKET_LABELS[p.market]} per game
@@ -140,54 +158,69 @@ export function PropCardRow({
                 )}
               </ul>
 
-              {/* Best prices */}
-              <div className="grid g2" style={{ gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-                <div style={{ background: "rgba(34,197,94,0.08)", padding: 8, borderRadius: 6, border: "1px solid rgba(34,197,94,0.2)" }}>
+              {/* Injury impact on this prop */}
+              <div className="inj-box">
+                <b>Injury report for this prop</b>
+                {inj.items.length === 0 ? (
+                  <div className="note">No rotation injuries on {pl.team} or {opp} change this angle.</div>
+                ) : (
+                  <ul className="clean text-xs" style={{ marginTop: 4 }}>
+                    {inj.items.map((it, i) => (
+                      <li key={i} className="row" style={{ color: it.side === "self" ? "var(--red)" : it.shift > 0 ? "var(--green)" : "var(--text2)" }}>
+                        <span>
+                          <b>{it.side === "self" ? "This player" : it.side === "team" ? pl.team : opp}:</b> {it.detail}
+                          {it.shift !== 0 && <span className="note"> ({it.shift > 0 ? "favors Over" : "favors Under"})</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Bet at the retail books */}
+              <div className="grid g2" style={{ gridTemplateColumns: "1fr 1fr", gap: 8, margin: "10px 0" }}>
+                <div className="side over">
                   <div className="text-sm"><b>OVER {over.line}</b> {fo(over.price)} @ {over.book}</div>
-                  <div className="flex gap-1 mt-1" style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                    <button className="b sm alt" onClick={() => addBet(`${pl.name} Over ${over.line} ${MARKET_LABELS[p.market]}`, over.book, over.price, 1)}>+Bet</button>
-                    <button className="b sm alt" onClick={() => addToParlay("over")}>+Parlay</button>
+                  <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                    <button className="b sm alt" onClick={() => addBet(`${pl.name} Over ${over.line} ${MARKET_LABELS[p.market]}`, over.book, over.price, 1, undefined, pick("over"))}>+Bet</button>
+                    <button className="b sm alt" onClick={() => addLeg(propLeg(p, pl, gm, "over"))}>+Parlay</button>
                   </div>
                 </div>
-                <div style={{ background: "rgba(239,68,68,0.08)", padding: 8, borderRadius: 6, border: "1px solid rgba(239,68,68,0.2)" }}>
+                <div className="side under">
                   <div className="text-sm"><b>UNDER {under.line}</b> {fo(under.price)} @ {under.book}</div>
-                  <div className="flex gap-1 mt-1" style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                    <button className="b sm alt" onClick={() => addBet(`${pl.name} Under ${under.line} ${MARKET_LABELS[p.market]}`, under.book, under.price, 1)}>+Bet</button>
-                    <button className="b sm alt" onClick={() => addToParlay("under")}>+Parlay</button>
+                  <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                    <button className="b sm alt" onClick={() => addBet(`${pl.name} Under ${under.line} ${MARKET_LABELS[p.market]}`, under.book, under.price, 1, undefined, pick("under"))}>+Bet</button>
+                    <button className="b sm alt" onClick={() => addLeg(propLeg(p, pl, gm, "under"))}>+Parlay</button>
                   </div>
                 </div>
               </div>
 
-              {/* Sharp book odds */}
-              {a.consensus?.booksUsed && a.consensus.booksUsed.length > 0 && a.consensus.booksUsed[0].name !== "avg" && (
+              {/* Sharp books: +EV spotting only */}
+              {a.consensus.booksUsed.length > 0 && (
                 <div style={{ marginBottom: 8 }}>
-                  <div className="text-xs note" style={{ marginBottom: 4 }}>Sharp consensus odds (weighted {a.conf === "Pass" || a.conf === "Lean" ? "below playable edge" : `→ ${(a.best.ev * 100).toFixed(1)}% EV`}):</div>
+                  <div className="note" style={{ marginBottom: 4 }}>Sharp books (+EV spotting only, not for betting) · {a.best.side} {a.best.line}:</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {a.consensus.booksUsed.map((sb: any, sbi: number) => (
-                      <span key={sbi} className="text-xs" style={{ background: "rgba(179,136,255,0.1)", border: "1px solid rgba(179,136,255,0.2)", padding: "2px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>
-                        <b>{sb.name}</b> {sb.line}: {sb.odds > 0 ? "+" + sb.odds : sb.odds} ({sb.weight}% weight, {(sb.prob * 100).toFixed(1)}% implied)
+                    {a.consensus.booksUsed.map((sb, i) => (
+                      <span key={i} className="chip-book sharp">
+                        <b>{sb.name}</b> {fo(sb.odds)} · {(sb.prob * 100).toFixed(1)}% de-vigged · {sb.weight.toFixed(0)}% weight
                       </span>
                     ))}
                   </div>
                 </div>
               )}
-              {/* Book prices in a row */}
-              <div className="text-xs note" style={{ marginBottom: 6 }}>All books (line: O / U):</div>
+              <div className="note" style={{ marginBottom: 6 }}>Sportsbooks you can bet at (line: O / U):</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
                 {p.books.map((b: PropBook, bi: number) => (
-                  <span key={bi} className="text-xs" style={{ background: "var(--bg)", padding: "2px 6px", borderRadius: 4, whiteSpace: "nowrap" }}>
+                  <span key={bi} className="chip-book">
                     {BOOK_URLS[b.book] ? <a href={BOOK_URLS[b.book]} target="_blank" rel="noopener">{b.book}</a> : b.book}
                     &nbsp;{b.line}: O {fo(b.over)} / U {fo(b.under)}
                   </span>
                 ))}
               </div>
 
-              {/* View full history */}
-              <div style={{ display: "flex", gap: 6 }}>
-                <button className="b sm" onClick={() => setPropDetail ? setPropDetail(p.id) : setActiveTab("parlay")}>
-                  View full history (chart, slider, period analysis)
-                </button>
-              </div>
+              <button className="b sm" onClick={() => setPropDetail(p.id)}>
+                View full history (chart, slider, period analysis)
+              </button>
             </div>
           </td>
         </tr>
