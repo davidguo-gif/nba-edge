@@ -104,9 +104,9 @@ export function PropCardRow({
               <ul className="clean text-sm" style={{ marginBottom: 8 }}>
                 <li className="row">
                   <b>Edge:</b> {edgeOk
-                    ? `+${(a.best.ev * 100).toFixed(1)}% — above 3% threshold, playable`
+                    ? `+${(a.best.ev * 100).toFixed(1)}% — above 3% threshold, playable (sharp: ${a.consensus?.booksUsed?.filter((b:any) => b.name !== "avg").map((b:any) => b.name).join(", ") || "consensus"})`
                     : a.best.ev > 0
-                      ? `+${(a.best.ev * 100).toFixed(1)}% — below 3% threshold`
+                      ? `+${(a.best.ev * 100).toFixed(1)}% — below 3% threshold (sharp: ${a.consensus?.booksUsed?.filter((b:any) => b.name !== "avg").map((b:any) => b.name).join(", ") || "consensus"})`
                       : "No edge found"}
                 </li>
                 <li className="row">
@@ -158,6 +158,19 @@ export function PropCardRow({
                 </div>
               </div>
 
+              {/* Sharp book odds */}
+              {a.consensus?.booksUsed && a.consensus.booksUsed.length > 0 && a.consensus.booksUsed[0].name !== "avg" && (
+                <div style={{ marginBottom: 8 }}>
+                  <div className="text-xs note" style={{ marginBottom: 4 }}>Sharp consensus odds (weighted {a.conf === "Pass" || a.conf === "Lean" ? "below playable edge" : `→ ${(a.best.ev * 100).toFixed(1)}% EV`}):</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {a.consensus.booksUsed.map((sb: any, sbi: number) => (
+                      <span key={sbi} className="text-xs" style={{ background: "rgba(179,136,255,0.1)", border: "1px solid rgba(179,136,255,0.2)", padding: "2px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>
+                        <b>{sb.name}</b> {sb.line}: {sb.odds > 0 ? "+" + sb.odds : sb.odds} ({sb.weight}% weight, {(sb.prob * 100).toFixed(1)}% implied)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* Book prices in a row */}
               <div className="text-xs note" style={{ marginBottom: 6 }}>All books (line: O / U):</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>

@@ -672,8 +672,8 @@ export const TIME_OPTIONS = [
 export function consensusProb(
   books: PropBook[],
   side: "over" | "under",
-): { prob: number; booksUsed: { name: string; weight: number }[] } {
-  const weighted: { name: string; weight: number; prob: number }[] = [];
+): { prob: number; booksUsed: { name: string; weight: number; odds: number; line: number }[] } {
+  const weighted: { name: string; weight: number; prob: number; odds: number; line: number }[] = [];
   let totalWeight = 0;
 
   books.forEach((b) => {
@@ -688,6 +688,8 @@ export function consensusProb(
       name: SHARP_BOOK_ALIAS[key] || b.book,
       weight,
       prob,
+      odds,
+      line: b.line,
     });
     totalWeight += weight;
   });
@@ -704,7 +706,7 @@ export function consensusProb(
       count++;
     });
     const avg = count > 0 ? sum / count : 0.5;
-    return { prob: avg, booksUsed: [{ name: "avg", weight: 1 }] };
+    return { prob: avg, booksUsed: [{ name: "avg", weight: 1, odds: 0, line: 0 }] };
   }
 
   const prob = weighted.reduce((s, w) => s + w.prob * (w.weight / totalWeight), 0);

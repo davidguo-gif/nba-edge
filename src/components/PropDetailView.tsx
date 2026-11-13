@@ -105,7 +105,7 @@ export function PropDetailView() {
   const under = bestPrice(p.books, "under");
 
   // Use the same analysis computed by PropsTab (L10/L15/szn weighted, defense-adjusted, best EV)
-  const analysis = (p as any)._analysis as { rank: number; defAdj: number; best: any; conf: string } | undefined;
+  const analysis = (p as any)._analysis as { rank: number; defAdj: number; best: any; conf: string; consensus: any } | undefined;
   const useEdge = analysis?.best?.ev ?? 0;
   const useConf = analysis?.conf ?? "Pass";
   const useRank = analysis?.rank ?? (opp ? T[opp]?.rank?.[pl.pos]?.[p.market] || 15 : 15);
@@ -207,15 +207,17 @@ export function PropDetailView() {
           <li className="row">
             <b>Edge:</b> {useBest ? (
               <>{edge > 0.03
-                ? `+${(edge * 100).toFixed(1)}% — above the 3% threshold, this is a playable edge`
+                ? `+${(edge * 100).toFixed(1)}% — above 3% threshold, playable`
                 : edge > 0
-                  ? `+${(edge * 100).toFixed(1)}% — below the 3% threshold, small edge`
-                  : "No edge found"} (weighted L10/L15/szn + defense-adjusted EV)</>
+                  ? `+${(edge * 100).toFixed(1)}% — below 3% threshold`
+                  : "No edge found"} {analysis?.consensus?.booksUsed?.filter((b: any) => b.name !== "avg").length > 0
+                    ? `(sharp: ${analysis.consensus.booksUsed.filter((b: any) => b.name !== "avg").map((b: any) => b.name).join(", ")})`
+                    : "(consensus)"}</>
             ) : (
               <>{edge > 0.03
-                ? `+${(edge * 100).toFixed(1)}% — above the 3% threshold`
+                ? `+${(edge * 100).toFixed(1)}% — above 3% threshold`
                 : edge > 0
-                  ? `+${(edge * 100).toFixed(1)}% — below the 3% threshold`
+                  ? `+${(edge * 100).toFixed(1)}% — below 3% threshold`
                   : "No edge found"}</>
             )}
           </li>
@@ -308,6 +310,17 @@ export function PropDetailView() {
             </table>
           </div>
           <div>
+            {analysis?.consensus?.booksUsed && analysis.consensus.booksUsed.length > 0 && analysis.consensus.booksUsed[0].name !== "avg" && (
+              <div style={{ marginBottom: 10 }}>
+                <h3 style={{ marginTop: 0, marginBottom: 4 }}>Sharp consensus</h3>
+                {analysis.consensus.booksUsed.map((sb: any, sbi: number) => (
+                  <div key={sbi} className="text-xs" style={{ background: "rgba(179,136,255,0.08)", border: "1px solid rgba(179,136,255,0.2)", padding: "3px 8px", borderRadius: 4, marginBottom: 2, display: "flex", justifyContent: "space-between" }}>
+                    <span><b>{sb.name}</b> ({(sb.weight).toFixed(1)}% weight)</span>
+                    <span>{sb.line}: {sb.odds > 0 ? "+" + sb.odds : sb.odds} · {(sb.prob * 100).toFixed(1)}% implied</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <h3 style={{ marginTop: 0 }}>Sportsbooks</h3>
             {p.books.map((b: PropBook, bi: number) => (
               <div key={bi} className="text-xs" style={{ background: "var(--bg)", padding: "3px 6px", borderRadius: 4, marginBottom: 2, display: "flex", justifyContent: "space-between" }}>
