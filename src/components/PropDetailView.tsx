@@ -105,10 +105,10 @@ export function PropDetailView() {
 
   // Use the same analysis computed by PropsTab (L10/L15/szn weighted, defense-adjusted, best EV)
   const analysis = p._analysis;
-  const useEdge = analysis && !analysis.noSharp ? analysis.best.ev : 0;
+  const useEdge = analysis && analysis.source !== "none" ? analysis.best.ev : 0;
   const useConf = analysis?.conf ?? "Pass";
   const useRank = analysis?.rank ?? (opp ? T[opp]?.rank?.[pl.pos]?.[p.market] || 15 : 15);
-  const useBest = analysis && !analysis.noSharp ? analysis.best : undefined;
+  const useBest = analysis && analysis.source !== "none" ? analysis.best : undefined;
   const edgeOk = useEdge >= 0.03;
 
   // Compute the simpler edge too for display when analysis isn't available
@@ -209,9 +209,9 @@ export function PropDetailView() {
                 ? `+${(edge * 100).toFixed(1)}% — above 3% threshold, playable`
                 : edge > 0
                   ? `+${(edge * 100).toFixed(1)}% — below 3% threshold`
-                  : "No edge found"} (sharp: {analysis!.consensus.booksUsed.map((b) => b.name).join(", ")})</>
+                  : "No edge found"} (projected EV, win rate {Math.round(analysis!.best.p * 100)}%{analysis!.consensus.booksUsed.length ? `, sharp: ${analysis!.consensus.booksUsed.map((b) => b.name).join(", ")}` : ", our model only"})</>
             ) : (
-              <>No sharp book has priced this exact line, so +EV can't be measured.</>
+              <>Not enough data to project EV for this prop.</>
             )}
           </li>
           {useBest && (

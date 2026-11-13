@@ -99,6 +99,9 @@ export interface PropBook {
   line: number;
   over: number;
   under: number;
+  /** deep links to the bet slip at that book, when The Odds API provides them */
+  overLink?: string;
+  underLink?: string;
 }
 
 export interface Prop {
@@ -139,12 +142,22 @@ export interface InjuryImpact {
 
 export interface PropAnalysis {
   rank: number;
-  best: { book: string; side: "over" | "under"; line: number; odds: number; ev: number; p: number };
+  /** best price to bet; ev = projected EV and p = projected win rate (sharp consensus blended with our model) */
+  best: { book: string; side: "over" | "under"; line: number; odds: number; ev: number; p: number; link?: string; pModel?: number | null; pSharp?: number | null };
   conf: "Strong" | "Lean" | "Pass";
   noSharp: boolean;
+  /** where the win rate came from: sharp books + our model, our model alone, sharp books alone, or nothing */
+  source: "sharp+model" | "model" | "sharp" | "none";
+  /** projection from the market (external) adjusted by our model, in the stat's units */
+  proj: number | null;
+  /** the unadjusted market-implied projection and which books it came from */
+  mkt: number | null;
+  mktSource: "sharp" | "retail" | null;
+  /** our adjustment in stat units (injuries, rest, defense, pace) */
+  adj: number;
   consensus: { prob: number | null; booksUsed: { name: string; weight: number; prob: number; odds: number; line: number }[] };
   injury: InjuryImpact;
-  rating: { score: number; grade: "A" | "B" | "C" | "D" | "F"; factors: { name: string; impact: "positive" | "negative" | "neutral"; detail: string }[] };
+  rating: { score: number; grade: "A" | "B" | "C" | "D" | "F"; factors: { name: string; impact: "positive" | "negative" | "neutral"; detail: string }[]; lean: number };
 }
 
 /** One saved pick, kept so past days can be reviewed and graded. */

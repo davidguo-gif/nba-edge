@@ -49,6 +49,22 @@ interface NBAContextType {
 
 const NBAContext = createContext<NBAContextType | null>(null);
 
+/** Save the pick history; if browser storage is full, drop the oldest day until it fits. */
+function persistHistory(list: PickRecord[]): PickRecord[] {
+  let cur = list;
+  for (let i = 0; i < 8; i++) {
+    try {
+      save("history", cur);
+      return cur;
+    } catch {
+      const oldest = [...new Set(cur.map((r) => r.date))].sort()[0];
+      if (!oldest || cur.every((r) => r.date === oldest)) return cur;
+      cur = cur.filter((r) => r.date !== oldest);
+    }
+  }
+  return cur;
+}
+
 export function useNBA() {
   const ctx = useContext(NBAContext);
   if (!ctx) throw new Error("useNBA must be used within NBAProvider");
@@ -159,7 +175,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
     setHistory(store<PickRecord[]>("history", []));
   }, [refresh]);
 
-  // Save every playable pick (+EV vs the sharp consensus) before tip-off so past days can be reviewed.
+  // Keep every pick we make (any positive projected EV) before tip-off so past days can be reviewed and graded.
   useEffect(() => {
     const now = Date.now();
     const fresh: PickRecord[] = [];
@@ -167,7 +183,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
       const a = p._analysis;
       const pl = state.PLAYERS[p.pid];
       const gm = state.SLATE[p.gid];
-      if (!a || !pl || !gm || a.noSharp || a.best.ev < 0.03 || /^q\d_/.test(p.market)) return;
+      if (!a || !pl || !gm || a.source === "none" || a.best.ev <= 0 || /^q\d_/.test(p.market)) return;
       if (gm.dt && new Date(gm.dt).getTime() <= now) return; // already tipped off: keep the saved pre-game pick
       fresh.push({
         key: `${p.date}|${normName(pl.name)}|${p.market}`,
@@ -195,9 +211,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         const old = map.get(r.key);
         if (!old || old.result === "pending") map.set(r.key, r);
       });
-      const next = [...map.values()];
-      save("history", next);
-      return next;
+      return persistHistory([...map.values()]);
     });
   }, [state]);
 
@@ -215,8 +229,7 @@ export function NBAProvider({ children }: { children: React.ReactNode }) {
         changed = true;
         return { ...r, result: g.result, actual: g.actual };
       });
-      if (changed) save("history", next);
-      return changed ? next : cur;
+      return changed ? persistHistory(next) : cur;
     });
     setBets((cur) => {
       let changed = false;

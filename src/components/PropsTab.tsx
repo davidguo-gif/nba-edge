@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { MARKET_NAMES } from "@/types";
 import type { PickRecord } from "@/types";
-import { decOdds, todayET } from "@/lib/nba";
+import { decOdds, todayET, etDate } from "@/lib/nba";
 import { sideHits } from "@/lib/analysis";
 import { fmtOdds } from "@/lib/odds";
 import { PropCardRow } from "./PropCard";
@@ -22,11 +22,22 @@ function summarize(rows: PickRecord[]) {
 }
 
 function HistoryView({ date }: { date: string }) {
-  const { history, oddsFormat } = useNBA();
+  const { history, bets, oddsFormat } = useNBA();
+  const [tier, setTier] = useState<"all" | "lean" | "strong">("all");
   const rows = useMemo(
-    () => history.filter((r) => r.date === date).sort((a, b) => b.ev - a.ev),
-    [history, date],
+    () =>
+      history
+        .filter((r) => r.date === date && (tier === "all" || (tier === "lean" ? r.ev >= 0.03 : r.ev >= 0.08)))
+        .sort((a, b) => b.ev - a.ev),
+    [history, date, tier],
   );
+  // your own straight bets from that day (tracker), graded the same way
+  const dayBets = useMemo(
+    () => bets.filter((b) => (b.pick?.date ?? etDate(b.date)) === date),
+    [bets, date],
+  );
+  const betProfit = (b: (typeof bets)[number]) => (b.result === "win" ? b.units * (decOdds(b.odds) - 1) : b.result === "loss" ? -b.units : 0);
+  const betNet = dayBets.reduce((s, b) => s + betProfit(b), 0);
   const day = summarize(rows);
   const all = summarize(history);
   const byGrade = ["A", "B", "C", "D", "F"].map((g) => ({ g, ...summarize(rows.filter((r) => r.grade === g)) })).filter((x) => x.w + x.l + x.push + x.pending > 0);
@@ -43,6 +54,15 @@ function HistoryView({ date }: { date: string }) {
         <div className="stat"><span>All saved days</span><b>{all.w}-{all.l}</b><small className={all.net >= 0 ? "ok" : "bad"}>{all.net >= 0 ? "+" : ""}{all.net.toFixed(2)}u</small></div>
       </div>
 
+      <div className="filters">
+        <select value={tier} onChange={(e) => setTier(e.target.value as typeof tier)}>
+          <option value="all">Every pick we made</option>
+          <option value="lean">+EV 3% or more</option>
+          <option value="strong">Strong +EV 8% or more</option>
+        </select>
+        <span className="note">{rows.length} pick{rows.length !== 1 ? "s" : ""}</span>
+      </div>
+
       {byGrade.length > 0 && (
         <div className="filters">
           <span className="note">By rating:</span>
@@ -54,7 +74,7 @@ function HistoryView({ date }: { date: string }) {
 
       {rows.length === 0 ? (
         <div className="empty">
-          No picks were saved for this day. Picks (+EV of 3% or more against the sharp consensus) are saved automatically
+          No picks were saved for this day. Every pick with a positive projected EV is saved automatically
           whenever you fetch odds before tip-off, so history starts building from the first fetch.
         </div>
       ) : (
@@ -93,6 +113,34 @@ function HistoryView({ date }: { date: string }) {
           </table>
         </div>
       )}
+      <h3>Your straight bets</h3>
+      {dayBets.length === 0 ? (
+        <div className="note">No bets tracked for this day. Bets you add with +Bet or in the Tracker are kept here by day.</div>
+      ) : (
+        <>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr><th>Bet</th><th>Book</th><th className="num">Odds</th><th className="num">Units</th><th className="num">Actual</th><th>Result</th><th className="num">P/L</th></tr>
+              </thead>
+              <tbody>
+                {dayBets.map((b) => (
+                  <tr key={String(b.id)}>
+                    <td>{b.desc}</td>
+                    <td>{b.book}</td>
+                    <td className="num">{fmtOdds(b.odds, oddsFormat)}</td>
+                    <td className="num">{b.units}</td>
+                    <td className="num">{b.actual ?? "-"}</td>
+                    <td>{b.result === "pending" ? <span className="tag">Pending</span> : <span className={`tag ${b.result === "win" ? "ok" : b.result === "loss" ? "bad" : "warn"}`}>{b.result === "win" ? "HIT" : b.result === "loss" ? "MISS" : "PUSH"}</span>}</td>
+                    <td className={`num ${betProfit(b) >= 0 ? "ok" : "bad"}`}>{b.result === "pending" ? "-" : `${betProfit(b) >= 0 ? "+" : ""}${betProfit(b).toFixed(2)}u`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="note">Net for your bets this day: <b className={betNet >= 0 ? "ok" : "bad"}>{betNet >= 0 ? "+" : ""}{betNet.toFixed(2)}u</b></div>
+        </>
+      )}
       {day.pending > 0 && (
         <p className="note">
           &ldquo;Awaiting stats&rdquo; picks are graded automatically as soon as the game appears in the NBA data. Run <code>update-data.bat</code> and reload to pull the latest box scores.
@@ -120,6 +168,8 @@ export function PropsTab() {
   const isPast = selectedDate < todayET();
   const dayProps = PROPS.filter((p) => p.date === selectedDate && p._analysis);
   const dayGames = SLATE.filter((g) => g.date === selectedDate);
+  // only the teams actually playing on the selected date
+  const dayTeams = [...new Set(dayGames.flatMap((g) => [g.away, g.home]))].sort();
 
   const marketsToday = useMemo(() => {
     const seen = new Set(dayProps.map((p) => p.market));
@@ -148,9 +198,11 @@ export function PropsTab() {
       case "game": return pl.team;
       case "market": return p.market;
       case "line": return p.line;
-      case "edge": return a.noSharp ? -1 : a.best.ev;
-      case "proj": return p.proj ?? 0;
-      case "l5": case "l10": case "l15": case "szn": case "h2h":
+      case "edge": return a.source === "none" ? -9 : a.best.ev;
+      case "win": return a.source === "none" ? 0 : a.best.p;
+      case "avg": return p.proj ?? 0;
+      case "proj": return a.proj ?? 0;
+      case "l10": case "szn": case "h2h":
         return sideHits(pl, state, p, a)[sortCol].pct ?? -1;
       case "conf": return { Strong: 3, Lean: 2, Pass: 1 }[a.conf as "Strong"] ?? 0;
       case "def": return a.rank ?? 15;
@@ -265,10 +317,10 @@ export function PropsTab() {
           <div className="filters">
             <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}>
               <option value="all">All teams playing</option>
-              {dayGames.flatMap((g) => [
-                <option key={`${g.id}a`} value={g.away}>{g.away} (@ {g.home})</option>,
-                <option key={`${g.id}h`} value={g.home}>{g.home} (vs {g.away})</option>,
-              ])}
+              {dayTeams.map((t) => {
+                const g = dayGames.find((x) => x.home === t || x.away === t)!;
+                return <option key={t} value={t}>{t} ({g.home === t ? "vs " + g.away : "@ " + g.home})</option>;
+              })}
             </select>
             <select value={leanFilter} onChange={(e) => setLeanFilter(e.target.value)}>
               <option value="all">All picks</option>
@@ -292,15 +344,15 @@ export function PropsTab() {
                   <tr>
                     <th onClick={() => toggleSort("player")}>Player{sc("player")}</th>
                     <th onClick={() => toggleSort("game")}>Game{sc("game")}</th>
-                    <th onClick={() => toggleSort("market")}>Prop{sc("market")}</th>
+                    <th onClick={() => toggleSort("market")}>Prop (line){sc("market")}</th>
                     <th onClick={() => toggleSort("line")}>Pick{sc("line")}</th>
-                    <th onClick={() => toggleSort("proj")} className="num">Avg{sc("proj")}</th>
-                    <th onClick={() => toggleSort("edge")} className="num">EV{sc("edge")}</th>
+                    <th onClick={() => toggleSort("avg")} className="num" title="Season average">Avg{sc("avg")}</th>
+                    <th onClick={() => toggleSort("proj")} className="num" title="Market projection adjusted by our model">Proj{sc("proj")}</th>
+                    <th onClick={() => toggleSort("edge")} className="num" title="Projected EV: sharp books blended with our model">Proj EV{sc("edge")}</th>
+                    <th onClick={() => toggleSort("win")} className="num" title="Projected win rate from our model and the sharp books">Win %{sc("win")}</th>
                     <th onClick={() => toggleSort("rating")} className="num">Rating{sc("rating")}</th>
                     <th onClick={() => toggleSort("def")} className="num">Opp rank{sc("def")}</th>
-                    <th onClick={() => toggleSort("l5")} className="hr">L5{sc("l5")}</th>
                     <th onClick={() => toggleSort("l10")} className="hr">L10{sc("l10")}</th>
-                    <th onClick={() => toggleSort("l15")} className="hr">L15{sc("l15")}</th>
                     <th onClick={() => toggleSort("szn")} className="hr">Season{sc("szn")}</th>
                     <th onClick={() => toggleSort("h2h")} className="hr">H2H{sc("h2h")}</th>
                   </tr>

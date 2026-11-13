@@ -203,7 +203,7 @@ export async function GET(req: NextRequest) {
       for (const { markets, group } of marketGroups) {
         // quarter props are only priced by US retail books, so don't pay for the other regions
         const regions = group === "main" ? REGIONS : "us";
-        const oddsUrl = `${API}/events/${ev.id}/odds?apiKey=${key}&regions=${regions}&markets=${markets.join(",")}&oddsFormat=american`;
+        const oddsUrl = `${API}/events/${ev.id}/odds?apiKey=${key}&regions=${regions}&markets=${markets.join(",")}&oddsFormat=american&includeLinks=true`;
         const oddsRes = await fetch(oddsUrl);
         if (!oddsRes.ok) continue;
 
@@ -225,8 +225,9 @@ export async function GET(req: NextRequest) {
               names[k] = o.description;
               const book = acc[k][side][name] || (acc[k][side][name] = { book: name, line: o.point });
               book.line = o.point;
-              if (o.name === "Over") book.over = o.price;
-              else if (o.name === "Under") book.under = o.price;
+              const link = o.link || m.link || bk.link;
+              if (o.name === "Over") { book.over = o.price; if (link) book.overLink = link; }
+              else if (o.name === "Under") { book.under = o.price; if (link) book.underLink = link; }
             });
           });
         });

@@ -51,17 +51,21 @@ export function PropCardRow({
   const rPrev = record(w.prev, p.market, p.line);
   const rH2H = record(h2h, p.market, p.line);
 
-  const edgeOk = !a.noSharp && a.best.ev >= 0.03;
-  const pickLabel = edgeOk ? `${a.best.side === "over" ? "O" : "U"} ${a.best.line}` : "—";
+  const hasData = a.source !== "none";
+  const hasPick = hasData && a.best.ev > 0;
+  const edgeOk = hasData && a.best.ev >= 0.03;
+  const betUrl = a.best.link || BOOK_URLS[a.best.book];
+  const srcLabel = a.source === "sharp+model" ? "sharp books + our model" : a.source === "sharp" ? "sharp books" : "our model only";
   const confCls = a.conf === "Strong" ? "tag ok" : a.conf === "Lean" ? "tag warn" : "tag";
   const d = defExplain(a.rank, pl.pos, p.market);
   const gLabel = gm ? `${pl.team === gm.home ? "vs" : "@"} ${pl.team === gm.home ? gm.away : gm.home}` : pl.team;
   const sharpNames = a.consensus.booksUsed.map((b) => b.name).join(", ");
   const inj = a.injury;
-  const injFlag = inj.self === "out" ? "OUT" : inj.self === "risk" ? "RISK" : inj.items.some((i) => i.shift !== 0) ? "INJ" : "";
+  // only flag real impact: own status, or a net shift big enough to move the prop
+  const injFlag = inj.self === "out" ? "OUT" : inj.self === "risk" ? "RISK" : Math.abs(inj.shift) >= 4 ? "INJ" : "";
 
   const hits = sideHits(pl, state, p, a);
-  const diff = p.proj != null && p.proj > 0 ? p.proj - p.line : null;
+  const diff = a.proj != null ? a.proj - p.line : null;
 
   const pick = (side: "over" | "under") => ({ player: pl.name, market: p.market, line: side === "over" ? over.line : under.line, side, date: p.date });
 
@@ -77,27 +81,39 @@ export function PropCardRow({
           {gLabel}
           {gm && <div className="note">{gm.time}</div>}
         </td>
-        <td>{MARKET_NAMES[p.market] || p.market}</td>
         <td>
-          {edgeOk ? (
+          <b>{MARKET_NAMES[p.market] || p.market}</b>
+          <div className="note">Over / Under <b>{p.line}</b></div>
+        </td>
+        <td onClick={(e) => e.stopPropagation()}>
+          {hasPick ? (
             <>
-              <span className={`pickbtn ${a.best.side}`}>{a.best.side === "over" ? "O" : "U"} {a.best.line}</span>
-              <div className="note">{fo(a.best.odds)} · {a.best.book}</div>
+              <span className={`pickbtn ${a.best.side}`}>{a.best.side === "over" ? "Over" : "Under"} {a.best.line}</span>
+              <div className="note">
+                <a href={betUrl} target="_blank" rel="noopener" title={`Bet this at ${a.best.book}`}>{a.best.book} {fo(a.best.odds)} ↗</a>
+              </div>
             </>
           ) : (
             <>
-              <span className="note">{a.noSharp ? "No sharp line" : "No edge"}</span>
+              <span className="note">{hasData ? "No +EV pick" : "Not enough data"}</span>
               <div className="note">line {p.line}</div>
             </>
           )}
         </td>
         <td className="num">
           {p.proj != null && p.proj > 0 ? <b>{p.proj}</b> : <span className="note">-</span>}
+        </td>
+        <td className="num">
+          {a.proj != null ? <b>{a.proj}</b> : <span className="note">-</span>}
           {diff != null && <div className={`note ${diff > 0 ? "ok" : diff < 0 ? "bad" : ""}`}>{diff > 0 ? "+" : ""}{diff.toFixed(1)} vs line</div>}
         </td>
         <td className="num">
-          {edgeOk ? <b className="ok">+{(a.best.ev * 100).toFixed(1)}%</b> : <span className="note">-</span>}
+          {hasData ? <b className={a.best.ev > 0 ? "ok" : "bad"}>{a.best.ev > 0 ? "+" : ""}{(a.best.ev * 100).toFixed(1)}%</b> : <span className="note">-</span>}
           <div><span className={confCls}>{a.conf}</span></div>
+        </td>
+        <td className="num">
+          {hasData ? <b>{Math.round(a.best.p * 100)}%</b> : <span className="note">-</span>}
+          {hasData && <div className="note">{(100 / decOdds(a.best.odds)).toFixed(0)}% needed</div>}
         </td>
         <td className="num">
           <span className={`tag ${gradeCls(a.rating.grade)}`}>{a.rating.grade}</span>
@@ -107,9 +123,7 @@ export function PropCardRow({
           <span className={d.tone}>{ord(a.rank)}</span>
           <div className="note">{a.rank >= 21 ? "soft" : a.rank <= 10 ? "tough" : "avg"}</div>
         </td>
-        <Hit h={hits.l5} />
         <Hit h={hits.l10} />
-        <Hit h={hits.l15} />
         <Hit h={hits.szn} />
         <Hit h={hits.h2h} />
       </tr>
@@ -121,17 +135,21 @@ export function PropCardRow({
               <ul className="clean text-sm" style={{ marginBottom: 8 }}>
                 <li className="row">
                   <b>Edge:</b>{" "}
-                  {a.noSharp
-                    ? "No sharp book (Pinnacle, Kalshi, Novig, Polymarket, ProphetX) has priced this exact line, so +EV can't be measured. Treat it as unrated."
-                    : a.best.ev >= 0.03
-                      ? `+${(a.best.ev * 100).toFixed(1)}% — playable (sharp: ${sharpNames})`
-                      : a.best.ev > 0
-                        ? `+${(a.best.ev * 100).toFixed(1)}% — below the 3% threshold (sharp: ${sharpNames})`
-                        : `No positive EV at any book (sharp: ${sharpNames})`}
+                  {!hasData
+                    ? "Not enough data to project this prop (no sharp line and not enough games to model)."
+                    : `Projected EV ${a.best.ev >= 0 ? "+" : ""}${(a.best.ev * 100).toFixed(1)}%${a.best.ev >= 0.03 ? ", playable" : a.best.ev > 0 ? ", below the 3% threshold" : ", no edge"} (from ${srcLabel}${sharpNames ? ": " + sharpNames : ""})`}
                 </li>
-                {!a.noSharp && (
+                {hasData && (
                   <li className="row">
-                    <b>Best bet:</b> <b>{a.best.side === "over" ? "OVER" : "UNDER"} {a.best.line}</b> @ {a.best.book} ({fo(a.best.odds)}) — sharp true probability {Math.round(a.best.p * 100)}% vs {(100 / decOdds(a.best.odds)).toFixed(0)}% implied by the price
+                    <b>Projected win rate:</b> <b>{Math.round(a.best.p * 100)}%</b> for the {a.best.side === "over" ? "Over" : "Under"} {a.best.line} @ {a.best.book} ({fo(a.best.odds)}), needs {(100 / decOdds(a.best.odds)).toFixed(0)}% to break even
+                    {a.best.pModel != null && a.best.pSharp != null && <span className="note"> (our model {Math.round(a.best.pModel * 100)}%, sharp consensus {Math.round(a.best.pSharp * 100)}%, averaged)</span>}
+                    {a.best.pModel != null && a.best.pSharp == null && <span className="note"> (our model {Math.round(a.best.pModel * 100)}%, pulled toward 50% because no sharp book confirms it)</span>}
+                  </li>
+                )}
+                {a.proj != null && (
+                  <li className="row">
+                    <b>Projection:</b> <b>{a.proj}</b> {MARKET_NAMES[p.market]}
+                    {a.mkt != null ? <> = market {a.mkt} ({a.mktSource === "sharp" ? "sharp books" : "sportsbooks"}) {a.adj >= 0 ? "+" : ""}{a.adj} from our model (rest, defense, pace, injuries)</> : <> from our season and last-10 averages {a.adj >= 0 ? "+" : ""}{a.adj} from our model</>}
                   </li>
                 )}
                 <li className="row">
