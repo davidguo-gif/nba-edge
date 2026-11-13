@@ -204,7 +204,7 @@ export function PropsTab() {
       if (combined) {
         await applyOdds(combined);
         if (!sgoKey) setOddsStatus(`Loaded ${combined.props.length} lines across ${combined.games.length} games`);
-        else setOddsStatus(`Loaded ${combined.props.length} lines (from ${apiKey && sgoKey ? "The Odds API + sharp/prediction books" : "sharp/prediction books"})`);
+        else setOddsStatus(`Loaded ${combined.props.length} lines (${apiKey && sgoKey ? "The Odds API + Sharp books" : "Sharp books only"})`);
       }
     } catch (e: any) {
       setOddsStatus("Error: " + e.message);
@@ -231,8 +231,8 @@ export function PropsTab() {
             <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="the-odds-api.com key" />
           </label>
           <label>
-            Prediction Market API key
-            <input type="password" value={sgoKey} onChange={(e) => setSgoKey(e.target.value)} placeholder="predictionmarketapi.com key (Kalshi, Polymarket, Novig)" />
+            Sharp books API key
+            <input type="password" value={sgoKey} onChange={(e) => setSgoKey(e.target.value)} placeholder="predictionmarketapi.com key → Kalshi, Polymarket, Novig" />
           </label>
           <button className="b" onClick={fetchOdds} disabled={loadingOdds || (!apiKey && !sgoKey)}>
             {loadingOdds ? "Loading..." : "Fetch odds"}
