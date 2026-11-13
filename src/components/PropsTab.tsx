@@ -11,6 +11,7 @@ export function PropsTab() {
   const { state, applyOdds, focus, clearFocus, timeHorizon, setTimeHorizon } = useNBA();
   const { SLATE, PROPS, T, CTX, PLAYERS } = state;
   const [apiKey, setApiKey] = useState("");
+  const [sgoKey, setSgoKey] = useState("");
   const [loadingOdds, setLoadingOdds] = useState(false);
   const [oddsStatus, setOddsStatus] = useState("");
   const [gameFilter, setGameFilter] = useState("all");
@@ -105,6 +106,8 @@ export function PropsTab() {
   useEffect(() => {
     const stored = localStorage.getItem("nbaedge.apikey");
     if (stored) setApiKey(stored);
+    const sgo = localStorage.getItem("nbaedge.sgokey");
+    if (sgo) setSgoKey(sgo);
   }, []);
 
   // focus from parlay leg
@@ -121,19 +124,67 @@ export function PropsTab() {
   }, [focus]);
 
   const fetchOdds = async () => {
-    if (!apiKey) return;
+    if (!apiKey && !sgoKey) return;
     setLoadingOdds(true);
     setOddsStatus("Fetching odds...");
     try {
-      const res = await fetch(`/api/odds?key=${encodeURIComponent(apiKey)}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error || "Failed to fetch odds");
+      let combined: any = null;
+
+      if (apiKey) {
+        const res = await fetch(`/api/odds?key=${encodeURIComponent(apiKey)}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(err.error || "Failed to fetch odds");
+        }
+        localStorage.setItem("nbaedge.apikey", apiKey);
+        combined = await res.json();
       }
-      localStorage.setItem("nbaedge.apikey", apiKey);
-      const odds = await res.json();
-      await applyOdds(odds);
-      setOddsStatus(`Loaded ${odds.props.length} lines across ${odds.games.length} games`);
+
+      if (sgoKey) {
+        const sgoRes = await fetch(`/api/odds-sgo?key=${encodeURIComponent(sgoKey)}`);
+        if (sgoRes.ok) {
+          localStorage.setItem("nbaedge.sgokey", sgoKey);
+          const sgoData = await sgoRes.json();
+          if (combined) {
+            // Merge SGO data into combined
+            const existingNames = new Set(combined.props.map((p: any) => p.name + "|" + p.market));
+            sgoData.props.forEach((sp: any) => {
+              const key = sp.name + "|" + sp.market;
+              if (!existingNames.has(key)) {
+                combined.props.push(sp);
+              } else {
+                // Merge books into existing prop
+                const existing = combined.props.find((p: any) => p.name + "|" + p.market === key);
+                if (existing) {
+                  sp.books.forEach((sb: any) => {
+                    if (!existing.books.find((eb: any) => eb.book === sb.book)) {
+                      existing.books.push(sb);
+                    }
+                  });
+                }
+              }
+            });
+            // Merge games
+            sgoData.games.forEach((sg: any) => {
+              if (!combined.games.find((g: any) => g.home === sg.home && g.away === sg.away)) {
+                combined.games.push(sg);
+              }
+            });
+            setOddsStatus(`Loaded ${combined.props.length} lines (${sgoData.props.length} from sharp/prediction books)`);
+          } else {
+            combined = sgoData;
+          }
+        } else {
+          const errText = await sgoRes.text().catch(() => "");
+          if (!combined) throw new Error(`SGO API: ${sgoRes.status} ${errText}`);
+        }
+      }
+
+      if (combined) {
+        await applyOdds(combined);
+        if (!sgoKey) setOddsStatus(`Loaded ${combined.props.length} lines across ${combined.games.length} games`);
+        else setOddsStatus(`Loaded ${combined.props.length} lines (from ${apiKey && sgoKey ? "The Odds API + sharp/prediction books" : "sharp/prediction books"})`);
+      }
     } catch (e: any) {
       setOddsStatus("Error: " + e.message);
     } finally {
@@ -155,15 +206,20 @@ export function PropsTab() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="form">
           <label>
-            API key
+            The Odds API key
             <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="the-odds-api.com key" />
           </label>
-          <button className="b" onClick={fetchOdds} disabled={loadingOdds || !apiKey}>
+          <label>
+            Prediction Market API key
+            <input type="password" value={sgoKey} onChange={(e) => setSgoKey(e.target.value)} placeholder="predictionmarketapi.com key (Kalshi, Polymarket, Novig)" />
+          </label>
+          <button className="b" onClick={fetchOdds} disabled={loadingOdds || (!apiKey && !sgoKey)}>
             {loadingOdds ? "Loading..." : "Fetch odds"}
           </button>
           {oddsStatus && <span className="note">{oddsStatus}</span>}
           <button className="b alt sm" onClick={() => {
             localStorage.removeItem("nbaedge.apikey");
+            localStorage.removeItem("nbaedge.sgokey");
             localStorage.removeItem("nbaedge.odds");
             window.location.reload();
           }}>Clear</button>
