@@ -9,7 +9,7 @@ import type {
   NBAData,
   Injury,
 } from "@/types";
-import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL, SHARP_BOOK_WEIGHTS, SHARP_BOOK_ALIAS } from "@/types";
+import { TEAM_LIST, POSITIONS, STATS_MARKETS, ALL_MARKETS, BOOKS, posGroup as posGroupImport, STAT_IDX, AVG_MARKETS, POS_LABEL, SHARP_BOOK_WEIGHTS, SHARP_BOOK_ALIAS, CONSENSUS_DESCRIPTION } from "@/types";
 const posGroup = posGroupImport;
 
 /* ---------- state ---------- */
@@ -709,6 +709,229 @@ export function consensusProb(
 
   const prob = weighted.reduce((s, w) => s + w.prob * (w.weight / totalWeight), 0);
   return { prob, booksUsed: weighted };
+}
+
+/**
+ * Bet rating system based on the TopEndSports NBA Betting Strategy guide.
+ * Scores 1-100 using: schedule/rest, defense matchup, hit-rate edge,
+ * position fatigue, injury impact, pace context, and Q4 dynamics.
+ * Returns a rating object with letter grade, score, and factor breakdown.
+ */
+export interface BetRating {
+  score: number; // 1-100
+  grade: "A" | "B" | "C" | "D" | "F";
+  factors: { name: string; impact: "positive" | "negative" | "neutral"; detail: string }[];
+}
+
+export function calculateBetRating(opts: {
+  pl: Player;
+  gm: SlateGame | null;
+  market: string;
+  line: number;
+  opp: string;
+  oppName: string;
+  rank: number;
+  ev: number;
+  l10HitRate: number | null;
+  seasonHitRate: number | null;
+  injuries: Record<string, Injury[]>;
+  T: Record<string, TeamData>;
+}): BetRating {
+  const factors: BetRating["factors"] = [];
+  let score = 50; // neutral baseline
+
+  const { pl, gm, market, line, opp, rank, ev, l10HitRate, seasonHitRate, injuries, T } = opts;
+
+  // 1. Schedule/Rest (topendsports: "schedule analysis is the most accessible edge")
+  if (gm) {
+    const isHome = pl.team === gm.home;
+    const rest = isHome ? gm.hRest : gm.aRest;
+    const oppRest = isHome ? gm.aRest : gm.hRest;
+    const isB2B = rest === 0;
+    const isFour = isHome ? gm.hFour : gm.aFour;
+    const oppB2B = oppRest === 0;
+
+    if (isB2B) {
+      score -= 12;
+      factors.push({
+        name: "Schedule",
+        impact: "negative",
+        detail: `${pl.team} on back-to-back — research shows 1-3 pt decline, especially for guards`,
+      });
+    } else if (rest >= 3) {
+      score += 8;
+      factors.push({
+        name: "Schedule",
+        impact: "positive",
+        detail: `${pl.team} has ${rest} days rest — fresh legs boost performance`,
+      });
+    } else {
+      factors.push({ name: "Schedule", impact: "neutral", detail: `${rest} days rest — no significant edge` });
+    }
+
+    if (isFour) {
+      score -= 8;
+      factors.push({
+        name: "Schedule",
+        impact: "negative",
+        detail: `${pl.team} on 4 games in 5 nights — severe fatigue, especially for guards`,
+      });
+    }
+
+    if (oppB2B && !isB2B) {
+      score += 6;
+      factors.push({
+        name: "Schedule",
+        impact: "positive",
+        detail: `Opponent ${opp} on B2B — ${pl.name} faces tired defense`,
+      });
+    }
+  }
+
+  // 2. Defense matchup (topendsports: "individual matchups when betting wing props")
+  if (rank <= 10) {
+    score -= 9;
+    factors.push({
+      name: "Defense",
+      impact: "negative",
+      detail: `Tough matchup vs ${opts.oppName || opp} (${ord(rank)} vs ${posFull(pl.posRaw)})`,
+    });
+  } else if (rank >= 21) {
+    score += 9;
+    factors.push({
+      name: "Defense",
+      impact: "positive",
+      detail: `Soft matchup vs ${opts.oppName || opp} (${ord(rank)} vs ${posFull(pl.posRaw)} — allows more than most)`,
+    });
+  } else {
+    factors.push({ name: "Defense", impact: "neutral", detail: `Average defense (${ord(rank)}) — no edge` });
+  }
+
+  // 3. EV / edge from sharp consensus
+  if (ev >= 0.08) {
+    score += 15;
+    factors.push({
+      name: "Sharp EV",
+      impact: "positive",
+      detail: `Strong edge +${(ev * 100).toFixed(1)}% — above 8% threshold`,
+    });
+  } else if (ev >= 0.03) {
+    score += 8;
+    factors.push({
+      name: "Sharp EV",
+      impact: "positive",
+      detail: `Moderate edge +${(ev * 100).toFixed(1)}% — above 3% threshold`,
+    });
+  } else if (ev > 0) {
+    score += 2;
+    factors.push({
+      name: "Sharp EV",
+      impact: "neutral",
+      detail: `Small edge +${(ev * 100).toFixed(1)}% — below 3% threshold, not playable`,
+    });
+  } else {
+    score -= 10;
+    factors.push({ name: "Sharp EV", impact: "negative", detail: "No edge or negative EV" });
+  }
+
+  // 4. Hit rate trend (topendsports: "minutes trends matter more than raw stats")
+  if (l10HitRate != null && seasonHitRate != null) {
+    if (l10HitRate > seasonHitRate + 0.1) {
+      score += 5;
+      factors.push({
+        name: "Trend",
+        impact: "positive",
+        detail: `Heating up — L10 (${(l10HitRate * 100).toFixed(0)}%) > season (${(seasonHitRate * 100).toFixed(0)}%)`,
+      });
+    } else if (l10HitRate < seasonHitRate - 0.1) {
+      score -= 5;
+      factors.push({
+        name: "Trend",
+        impact: "negative",
+        detail: `Cooling off — L10 (${(l10HitRate * 100).toFixed(0)}%) < season (${(seasonHitRate * 100).toFixed(0)}%)`,
+      });
+    } else {
+      factors.push({ name: "Trend", impact: "neutral", detail: "Steady — L10 matches season rate" });
+    }
+  }
+
+  // 5. Position fatigue (topendsports: "guards cover most distance, decline most on B2B")
+  if (gm) {
+    const isHome = pl.team === gm.home;
+    const rest = isHome ? gm.hRest : gm.aRest;
+    if (rest === 0 && pl.pos === "G") {
+      score -= 6;
+      factors.push({
+        name: "Fatigue",
+        impact: "negative",
+        detail: `${posFull(pl.posRaw)} on B2B — guards cover 5+ miles/game, highest fatigue impact`,
+      });
+    } else if (rest === 0 && pl.pos === "C") {
+      // Centers hold production steadier per the guide
+      factors.push({
+        name: "Fatigue",
+        impact: "neutral",
+        detail: `Center on B2B — per-minute production holds steadier, though minutes may drop`,
+      });
+    }
+  }
+
+  // 6. Injury impact (topendsports: "missing rotation pieces changes pace, defensive schemes, scoring distribution")
+  const teamInjuries = injuries[pl.team] || [];
+  const oppInjuries = injuries[opp] || [];
+  const teammatesOut = teamInjuries.filter((i) => i.status === "Out" || i.status === "Questionable");
+  const oppOut = oppInjuries.filter((i) => i.status === "Out" || i.status === "Questionable");
+
+  if (teammatesOut.length > 0) {
+    // Use rate spike: when teammates are out, usage spikes for remaining players
+    // This can help over props
+    score += 4;
+    factors.push({
+      name: "Injuries",
+      impact: "positive",
+      detail: `${teammatesOut.length} teammate(s) out/Questionable — usage spike for ${pl.name}, benefits Over`,
+    });
+  }
+  if (oppOut.length > 0) {
+    score += 3;
+    factors.push({
+      name: "Injuries",
+      impact: "positive",
+      detail: `${oppOut.length} opponent(s) out/Questionable — weaker defense for ${pl.name}`,
+    });
+  }
+
+  // 7. Pace context (topendsports: "pace is the single best predictor of total score")
+  if (gm) {
+    const tm = T[pl.team];
+    if (tm && tm.pace >= 100) {
+      score += 3;
+      factors.push({
+        name: "Pace",
+        impact: "positive",
+        detail: `${pl.team} plays fast (${tm.pace.toFixed(1)} poss/game) — more possessions = more stats`,
+      });
+    } else if (tm && tm.pace <= 98.5) {
+      score -= 3;
+      factors.push({
+        name: "Pace",
+        impact: "negative",
+        detail: `${pl.team} plays slow (${tm.pace.toFixed(1)} poss/game) — fewer stats opportunities`,
+      });
+    }
+  }
+
+  // Clamp to 1-100
+  score = Math.max(1, Math.min(100, score));
+
+  // Letter grade
+  let grade: BetRating["grade"] = "F";
+  if (score >= 80) grade = "A";
+  else if (score >= 65) grade = "B";
+  else if (score >= 50) grade = "C";
+  else if (score >= 35) grade = "D";
+
+  return { score, grade, factors };
 }
 
 export function clamp(x: number, a: number, b: number): number {

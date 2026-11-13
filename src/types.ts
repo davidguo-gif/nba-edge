@@ -230,16 +230,16 @@ export const BOOKS = [
   "DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN BET", "Fanatics",
 ];
 
-/** Sharp book weights for weighted-consensus EV calculation (sums to 100%). */
+/**
+ * Sharp book weights for weighted-consensus EV calculation (sums to 100%).
+ * Currently normalized for books available via predictionmarketapi.com.
+ * When integrating additional APIs, add entries here and the consensusProb()
+ * function will automatically include them.
+ */
 export const SHARP_BOOK_WEIGHTS: Record<string, number> = {
-  pinnacle: 25,
-  draftkingspredictions: 17,
-  kalshi: 17,
-  bookmaker: 8,
-  circa: 8,
-  novig: 8,
-  polymarket: 8,
-  prophetx: 8,
+  kalshi: 51.5,
+  polymarket: 24.25,
+  novig: 24.25,
 };
 
 /** Map short/normalized book names to their canonical label. */
@@ -253,6 +253,9 @@ export const SHARP_BOOK_ALIAS: Record<string, string> = {
   polymarket: "Polymarket",
   prophetx: "ProphetX",
 };
+
+/** Weighted sharp consensus — which books contribute to the EV true-probability. */
+export const CONSENSUS_DESCRIPTION = "Sharp consensus (Kalshi 51.5%, Polymarket 24.25%, Novig 24.25%)";
 
 export const BOOK_URLS: Record<string, string> = {
   DraftKings: "https://sportsbook.draftkings.com",

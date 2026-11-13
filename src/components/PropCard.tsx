@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { BOOK_URLS, MARKET_NAMES, MARKET_LABELS, type PropBook, type Player, type SlateGame } from "@/types";
-import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds } from "@/lib/nba";
+import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds, type BetRating } from "@/lib/nba";
 import { bestPrice, propLeg } from "@/lib/parlay";
 import { fmtOdds } from "@/lib/odds";
 
@@ -86,10 +86,18 @@ export function PropCardRow({
         <td>
           <span className={confTag} style={confStyle}>{a.conf}</span>
         </td>
+        <td className="num">
+          {a.rating && (
+            <span className={`tag ${a.rating.grade === "A" || a.rating.grade === "B" ? "ok" : a.rating.grade === "D" || a.rating.grade === "F" ? "bad" : "warn"}`}>
+              {a.rating.grade}
+            </span>
+          )}
+          <div className="text-xs note">{a.rating ? a.rating.score : "—"}</div>
+        </td>
       </tr>
       {open && (
         <tr className="expand-row">
-          <td colSpan={8} style={{ padding: 0, borderBottom: "2px solid var(--blue)" }}>
+          <td colSpan={9} style={{ padding: 0, borderBottom: "2px solid var(--blue)" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ padding: "12px 16px", cursor: "default", background: "rgba(59,130,246,0.04)" }}>
               {/* Analysis notes — clean, concise */}
               <h3 style={{ marginTop: 0, marginBottom: 8 }}>Analysis</h3>
@@ -113,6 +121,18 @@ export function PropCardRow({
                 <li className="row">
                   <b>Defense:</b> {oppName || opp} ranks <b>{ord(a.rank)}</b> vs {posFull(pl.posRaw)} in {MARKET_NAMES[p.market]} — {d.effect}
                 </li>
+                {a.rating && (
+                  <li className="row" style={{ marginTop: 6 }}>
+                    <b>Rating:</b> <span className={`tag ${a.rating.grade === "A" || a.rating.grade === "B" ? "ok" : a.rating.grade === "D" || a.rating.grade === "F" ? "bad" : "warn"}`}>{a.rating.grade}</span> ({a.rating.score}/100)
+                    <ul className="clean text-xs" style={{ marginTop: 2 }}>
+                      {a.rating.factors.map((f: any, fi: number) => (
+                        <li key={fi} className="row" style={{ fontSize: 11, color: f.impact === "positive" ? "var(--green)" : f.impact === "negative" ? "var(--red)" : "var(--mut)" }}>
+                          <b>{f.name}:</b> {f.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
                 {p.proj != null && (
                   <li className="row">
                     <b>Avg:</b> {p.proj} {MARKET_LABELS[p.market]} per game

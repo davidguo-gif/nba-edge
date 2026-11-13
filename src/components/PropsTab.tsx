@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import type { SlateGame } from "@/types";
 import { MARKET_NAMES } from "@/types";
-import { decOdds, clamp, windows, hit, consensusProb } from "@/lib/nba";
+import { decOdds, clamp, windows, hit, record, consensusProb, calculateBetRating } from "@/lib/nba";
 import { PropCardRow } from "./PropCard";
 
 export function PropsTab() {
@@ -70,7 +70,27 @@ export function PropsTab() {
 
     if (leanFilter === "strong" && conf !== "Strong") return false;
     if (leanFilter === "lean" && conf !== "Strong" && conf !== "Lean") return false;
-    (p as any)._analysis = { rank, defAdj: 0, best, conf, consensus: consOver };
+
+    // Calculate bet rating from TopEndSports framework
+    const w = windows(pl, state.seasonStart);
+    const r10 = record(w.l10, p.market, p.line);
+    const rc = record(w.cur, p.market, p.line);
+    const rating = calculateBetRating({
+      pl,
+      gm,
+      market: p.market,
+      line: p.line,
+      opp: c.opp,
+      oppName: T[c.opp]?.name || c.opp,
+      rank,
+      ev: best?.ev ?? 0,
+      l10HitRate: r10.pct,
+      seasonHitRate: rc.pct,
+      injuries: state.injuries,
+      T,
+    });
+
+    (p as any)._analysis = { rank, defAdj: 0, best, conf, consensus: consOver, rating };
     return true;
   });
 
@@ -92,6 +112,7 @@ export function PropsTab() {
       }
       case "conf": return { Strong: 3, Lean: 2, Pass: 1 }[a.conf] ?? 0;
       case "def": return a.rank ?? 15;
+      case "rating": return a.rating?.score ?? 0;
       default: return 0;
     }
   };
@@ -257,6 +278,7 @@ export function PropsTab() {
               <th onClick={() => toggleSort("hit")}>Hit rate{sc("hit")}</th>
               <th onClick={() => toggleSort("def")} className="num">Def{sc("def")}</th>
               <th onClick={() => toggleSort("conf")}>Conf{sc("conf")}</th>
+            <th onClick={() => toggleSort("rating")}>Rating{sc("rating")}</th>
             </tr>
           </thead>
           <tbody>
