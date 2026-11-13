@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { BOOK_URLS, type Player, type SlateGame, type PropBook, MARKET_NAMES, MARKET_LABELS } from "@/types";
 import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds } from "@/lib/nba";
-import { bestPrice, propLeg } from "@/lib/parlay";
+import { bestPrice, bestPriceAtLine, propLeg } from "@/lib/parlay";
 import { fmtOdds } from "@/lib/odds";
 
 const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);
@@ -101,8 +101,8 @@ export function PropDetailView() {
   const min = Math.max(0, Math.floor(Math.min(p.proj ?? p.line, p.line) - span) + 0.5);
   const max = Math.ceil(Math.max(p.proj ?? p.line, p.line) + span) - 0.5;
 
-  const over = bestPrice(p.books, "over");
-  const under = bestPrice(p.books, "under");
+  const over = bestPriceAtLine(p.books, "over", p.line);
+  const under = bestPriceAtLine(p.books, "under", p.line);
 
   // Use the same analysis computed by PropsTab (L10/L15/szn weighted, defense-adjusted, best EV)
   const analysis = (p as any)._analysis as { rank: number; defAdj: number; best: any; conf: string; consensus: any } | undefined;

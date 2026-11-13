@@ -92,6 +92,21 @@ export function bestPrice(books: PropBook[], side: "over" | "under") {
   return best;
 }
 
+/**
+ * Best price for a side at a specific line.
+ * Only considers books whose line matches `atLine`, so Over and Under
+ * always refer to the same line across both buttons.
+ */
+export function bestPriceAtLine(books: PropBook[], side: "over" | "under", atLine: number) {
+  const matched = books.filter((b) => b.line === atLine);
+  if (!matched.length) return bestPrice(books, side); // fallback
+  let best = { book: matched[0].book, line: matched[0].line, price: matched[0][side] };
+  matched.forEach((b) => {
+    if (decOdds(b[side]) > decOdds(best.price)) best = { book: b.book, line: b.line, price: b[side] };
+  });
+  return best;
+}
+
 export function propLeg(p: Prop, pl: Player, g: SlateGame | null, side: "over" | "under"): ParlayLeg {
   const b = bestPrice(p.books, side);
   return {

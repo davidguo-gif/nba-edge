@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useNBA } from "@/lib/NBAContext";
 import { BOOK_URLS, MARKET_NAMES, MARKET_LABELS, type PropBook, type Player, type SlateGame } from "@/types";
 import { windows, record, defExplain, prevSeasonLabel, mktWord, posFull, posGroupLabel, ord, decOdds, type BetRating } from "@/lib/nba";
-import { bestPrice, propLeg } from "@/lib/parlay";
+import { bestPrice, bestPriceAtLine, propLeg } from "@/lib/parlay";
 import { fmtOdds } from "@/lib/odds";
 
 const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);
@@ -35,8 +35,8 @@ export function PropCardRow({
   const curLabel = state.season;
   const prevLabel = prevSeasonLabel(state.season);
 
-  const over = bestPrice(p.books, "over");
-  const under = bestPrice(p.books, "under");
+  const over = bestPriceAtLine(p.books, "over", p.line);
+  const under = bestPriceAtLine(p.books, "under", p.line);
   const r10 = record(w.l10, p.market, p.line);
   const rc = record(w.cur, p.market, p.line);
   const rPrev = record(w.prev, p.market, p.line);
